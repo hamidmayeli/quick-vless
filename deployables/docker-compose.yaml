@@ -1,0 +1,76 @@
+name: quick-vless
+
+services:
+
+  # ── Xray VPN core ─────────────────────────────────────────────────────────────
+  # No host ports published — Caddy proxies raw TCP to xray:443 on the internal
+  # Docker network. Xray is completely unreachable from outside.
+  xray:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    networks:
+      - vpn
+    volumes:
+      - ./xray:/etc/xray        # config.json lives here; shared with app
+
+  # ── Management app ────────────────────────────────────────────────────────────
+  app:
+    image: hamidmayeli/quick-vless:latest
+    restart: unless-stopped
+    networks:
+      - vpn
+    depends_on:
+      - xray
+    volumes:
+      - app-data:/data          # users.json, admins.json, usage_history/
+      - ./xray:/xray-config     # startup sync patches config.json here
+    environment:
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=easy-xray
+      - Storage__UsersPath=/data/users.json
+      - Storage__AdminsPath=/data/admins.json
+      - Storage__UsageHistoryDir=/data/usage_history
+      - Xray__BinaryPath=/usr/bin/xray
+      - Xray__ConfigPath=/xray-config/config.json
+      - Xray__StatsServer=xray:10085
+      - Xray__InboundTag=vless-in
+      - Xray__Host=${XRAY_HOST}
+      - Xray__Port=443
+      - Xray__RealityPublicKey=${XRAY_REALITY_PUBLIC_KEY}
+      - Xray__RealityShortId=${XRAY_REALITY_SHORT_ID}
+      - Xray__Sni=${XRAY_SNI:-www.microsoft.com}
+      - Xray__Fingerprint=${XRAY_FINGERPRINT:-chrome}
+
+  # ── Caddy — SNI router + reverse proxy ───────────────────────────────────────
+  # Built from Dockerfile.caddy (standard caddy + layer4 module).
+  # Port 443: routes by SNI — management domain → app, everything else → xray.
+  # Port 80:  ACME HTTP-01 challenges + redirect to HTTPS.
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: hamidmayeli/quick-vless-caddy:latest
+    restart: unless-stopped
+    networks:
+      - vpn
+    depends_on:
+      - app
+      - xray
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - MANAGEMENT_DOMAIN=${MANAGEMENT_DOMAIN}
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  vpn:
+    driver: bridge

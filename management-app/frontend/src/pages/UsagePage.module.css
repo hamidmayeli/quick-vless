@@ -1,0 +1,49 @@
+.page { display: flex; flex-direction: column; gap: 1.75rem; }
+
+.title { margin: 0; font-size: 1.4rem; color: #e8e8f0; }
+
+.state { color: #6060a0; }
+.error { color: #ff8080; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.1rem 1.25rem;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+}
+
+.userName { font-size: 1rem; font-weight: 600; color: #e8e8f0; }
+.usedLabel { font-size: 1.4rem; font-weight: 700; color: #7c7cff; }
+.quota { font-size: 0.78rem; color: #6060a0; }
+
+.progressTrack {
+  height: 6px;
+  background: #2a2a4a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.2rem;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.chartWrap {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.chartTitle { margin: 0 0 1rem; font-size: 0.9rem; color: #8080a0; font-weight: 500; }

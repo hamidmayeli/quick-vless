@@ -1,0 +1,78 @@
+{
+  "users": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "Alice",
+      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567801",
+      "quota": 50,
+      "expiry": "2027-01-01",
+      "single_connection": false,
+      "enabled": true
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "name": "Bob",
+      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567802",
+      "quota": 100,
+      "expiry": null,
+      "single_connection": true,
+      "enabled": true
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "name": "Charlie",
+      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567803",
+      "quota": 20,
+      "expiry": "2026-12-31",
+      "single_connection": false,
+      "enabled": false
+    }
+  ],
+  "usage": [
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440001",
+      "date": "20260901",
+      "uplink": 1073741824,
+      "downlink": 5368709120,
+      "total": 6442450944
+    },
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440001",
+      "date": "20260902",
+      "uplink": 536870912,
+      "downlink": 2147483648,
+      "total": 2684354560
+    },
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440002",
+      "date": "20260901",
+      "uplink": 2147483648,
+      "downlink": 10737418240,
+      "total": 12884901888
+    },
+    {
+      "user_id": "550e8400-e29b-41d4-a716-446655440003",
+      "date": "20260901",
+      "uplink": 107374182,
+      "downlink": 536870912,
+      "total": 644245094
+    }
+  ],
+  "config": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "url": "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567801@example.com:443?type=tcp&security=reality&pbk=MOCK_PUBLIC_KEY&fp=chrome&sni=example.com&sid=abc123&spx=%2F&flow=xtls-rprx-vision#Alice"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "url": "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567802@example.com:443?type=tcp&security=reality&pbk=MOCK_PUBLIC_KEY&fp=chrome&sni=example.com&sid=abc123&spx=%2F&flow=xtls-rprx-vision#Bob"
+    }
+  ],
+  "auth": [
+    {
+      "id": "login",
+      "access_token": "mock-access-token-abc123",
+      "refresh_token": "mock-refresh-token-xyz789"
+    }
+  ]
+}

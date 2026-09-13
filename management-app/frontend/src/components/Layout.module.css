@@ -1,0 +1,65 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #0f0f23;
+  color: #e8e8f0;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #1a1a2e;
+  border-bottom: 1px solid #2a2a4a;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #7c7cff;
+  margin-right: auto;
+}
+
+.links {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.links a {
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  color: #a0a0c0;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.links a:hover { background: #2a2a4a; color: #e8e8f0; }
+
+.links a.active { background: #7c7cff22; color: #7c7cff; }
+
+.logout {
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #4a4a6a;
+  color: #a0a0c0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.logout:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+.main {
+  flex: 1;
+  padding: 2rem 1.5rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}

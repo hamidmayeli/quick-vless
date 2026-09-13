@@ -1,0 +1,127 @@
+.page { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.header { display: flex; align-items: center; justify-content: space-between; }
+
+.title { margin: 0; font-size: 1.4rem; color: #e8e8f0; }
+
+.state { color: #6060a0; }
+.error { color: #ff8080; }
+
+.formCard {
+  padding: 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.formTitle { margin: 0; font-size: 1rem; color: #a0a0c0; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #8080a0;
+}
+
+.checkField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #a0a0c0;
+  align-self: end;
+  padding-bottom: 0.4rem;
+}
+
+.input {
+  padding: 0.45rem 0.65rem;
+  background: #0f0f23;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  color: #e8e8f0;
+  font-size: 0.9rem;
+  outline: none;
+}
+.input:focus { border-color: #7c7cff; }
+
+.formActions { display: flex; gap: 0.75rem; }
+
+.btnPrimary {
+  padding: 0.5rem 1.1rem;
+  background: #7c7cff;
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btnPrimary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnPrimary:hover:not(:disabled) { opacity: 0.85; }
+
+.btnGhost {
+  padding: 0.5rem 1.1rem;
+  background: transparent;
+  border: 1px solid #3a3a5a;
+  border-radius: 7px;
+  color: #a0a0c0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.btnGhost:hover { border-color: #7c7cff; color: #7c7cff; }
+
+.table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  color: #6060a0;
+  border-bottom: 1px solid #2a2a4a;
+  font-weight: 500;
+}
+.table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #1e1e38;
+  color: #c0c0e0;
+}
+.table tr:hover td { background: #1a1a2e; }
+.table tr.disabled td { opacity: 0.5; }
+
+.badgeOn {
+  padding: 0.2rem 0.55rem;
+  background: #00ff8822;
+  color: #00ff88;
+  border-radius: 20px;
+  font-size: 0.78rem;
+}
+.badgeOff {
+  padding: 0.2rem 0.55rem;
+  background: #ff444422;
+  color: #ff8888;
+  border-radius: 20px;
+  font-size: 0.78rem;
+}
+
+.actions { display: flex; gap: 0.4rem; }
+
+.btnSmall {
+  padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  border: 1px solid #3a3a5a;
+  background: transparent;
+  color: #a0a0c0;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.btnSmall:hover { border-color: #7c7cff; color: #7c7cff; }
+.btnSmall.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
