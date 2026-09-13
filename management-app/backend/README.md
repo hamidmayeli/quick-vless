@@ -181,13 +181,13 @@ The sample config for VLESS + TCP + REALITY + Vision
 
 * **Execution Interval:** Configurable loop (default: `300` seconds / 5 minutes).
 * **Data Retrieval:** Queries Xray's `StatsService` API via CLI (`xray api statsquery --server=127.0.0.1:10085`).
-* **Data Transformation:** Converts byte values to Gigabytes (`bytes / 1073741824`) and appends snapshot records to `usage_history/*.csv`.
+* **Data Transformation:** Appends byte-count snapshots to `usage_history/*.csv`.
 
 ### 2.4 Bandwidth Quota Enforcement
 
 1. Calculates cumulative usage per user from history.
 2. Compares total usage against `quota` defined in `users.json`.
-3. If `Total GB >= Quota GB` (and `quota is not null`):
+3. If `Total Bytes >= Quota Bytes` (and `quota is not null`):
     * Sets `"enabled": false` in `users.json`.
     * Removes user from Xray via gRPC API (`RemoveUser`).
     * Logs a revocation event.

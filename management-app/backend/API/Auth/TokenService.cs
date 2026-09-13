@@ -50,5 +50,5 @@ public sealed class TokenService(IConfiguration config)
     }
 
     public bool ValidateRefreshToken(Admin admin, string token) =>
-        admin.RefreshToken == token && admin.RefreshTokenExpiry > DateTime.UtcNow;
+        admin.RefreshTokens.Any(rt => rt.Token == token && rt.Expiry > DateTime.UtcNow);
 }

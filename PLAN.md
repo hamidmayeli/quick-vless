@@ -97,16 +97,18 @@ A self-hosted management layer for [Xray-core](https://github.com/XTLS/Xray-core
 - [x] 5.3 Write `deployables/xray/config.json` (VLESS + TCP + REALITY + Vision template)
 - [x] 5.4 Write `deployables/.env.example` (all required variables with generation hints)
 
-### Phase 6 — CI/CD
-- [ ] 6.1 Write `.github/workflows/test.yml` (dotnet test + playwright)
-- [ ] 6.2 Write `.github/workflows/publish.yml` (build + push multi-arch Docker image)
+### Phase 6 — CI/CD ✅
+- [x] 6.1 Write `.github/workflows/test.yml` (dotnet test + playwright e2e in pipeline)
+- [x] 6.2 Write `.github/workflows/publish.yml` (build + push multi-arch Docker image)
 
-### Phase 7 — Install Script
-- [ ] 7.1 Write `install.sh` (pull docker-compose, prompt for config values, start services)
+### Phase 7 — Install Script ✅
+- [x] 7.1 Write `install.sh` (non-interactive, parameter defaults, step-based, re-runnable with state file)
 
-### Phase 8 — Documentation
-- [ ] 8.1 Write root `README.md` (overview, quick-start, architecture diagram)
-- [ ] 8.2 Write `docs/` pages (API reference, configuration guide, upgrading)
+### Phase 8 — Documentation ✅
+- [x] 8.1 Write root `README.md` (overview, architecture diagram, quick-start)
+- [x] 8.2 Write `docs/hosting.md` (server setup, DNS, firewall, Docker install, backup)
+- [x] 8.3 Write `docs/configuration.md` (all env vars, key generation, SNI guidance)
+- [x] 8.4 Write `docs/upgrading.md` (upgrades, rollback, backup/restore, logs, disk)
 
 ---
 
@@ -127,3 +129,5 @@ A self-hosted management layer for [Xray-core](https://github.com/XTLS/Xray-core
 | 2026-09-13 | 5 | Deployables complete: docker-compose (xray + app + caddy), Caddyfile (port 8443, auto-HTTPS), xray config.json template, .env.example |
 | 2026-09-13 | 3 | Phase 3 deferred — E2E tests will run against the Docker image (Phase 4 is a prerequisite) |
 | 2026-09-13 | 2,3 | Auth bootstrap (first login creates admin), PBKDF2+salt password hashing, Scalar API docs, /api route prefix, global snake_case JSON, GET /config/{userId} admin endpoint, structured logging on all endpoints, 23 integration tests (37 total passing), Playwright E2E tests, fixed frontend API contract (authApi, UsageRecord type, useUsage hook) |
+| 2026-09-13 | 1,2,3 | /api/v1 prefix on all routes, GET /config/{userId} public plain-text endpoint, secret managed by backend only, "Copy Config URL" per user, 34 tests passing |
+| 2026-09-13 | 6,7,8 | CI/CD workflows (test + publish multi-arch), install.sh (step-based, re-runnable), README, docs/hosting, docs/configuration, docs/upgrading |

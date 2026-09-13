@@ -52,7 +52,7 @@ public sealed class UsersIntegrationTests : IDisposable
         var response = await _client.PostAsJsonAsync("/api/v1/users", new
         {
             name = "TestUser",
-            quota = 50.0,
+            quota = 50L * 1_073_741_824L,
             expiry = (string?)null,
             single_connection = false,
             enabled = false,
@@ -61,6 +61,7 @@ public sealed class UsersIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var user = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("TestUser", user.GetProperty("name").GetString());
+        Assert.Equal(50L * 1_073_741_824L, user.GetProperty("quota").GetInt64());
         Assert.True(user.TryGetProperty("id", out var id) && !string.IsNullOrEmpty(id.GetString()));
     }
 
@@ -89,7 +90,7 @@ public sealed class UsersIntegrationTests : IDisposable
         var response = await _client.PutAsJsonAsync($"/api/v1/users/{id}", new
         {
             name = "UpdatedName",
-            quota = 100.0,
+            quota = 100L * 1_073_741_824L,
             expiry = (string?)null,
             single_connection = false,
             enabled = false,

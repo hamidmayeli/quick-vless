@@ -1,4 +1,5 @@
 using API.Models;
+using System.Globalization;
 
 namespace API.Storage;
 
@@ -9,7 +10,11 @@ public sealed class UsageRepository(IConfiguration config)
     public async Task AppendAsync(UsageRecord record)
     {
         Directory.CreateDirectory(_dir);
-        var file = Path.Combine(_dir, $"{record.Date}.csv");
+        var fileDate = DateTime.TryParse(record.Date, CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind, out var parsedDate)
+            ? parsedDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture)
+            : record.Date;
+        var file = Path.Combine(_dir, $"{fileDate}.csv");
         var line = $"{record.UserId},{record.Date},{record.Uplink},{record.Downlink},{record.Total}";
         await File.AppendAllTextAsync(file, line + Environment.NewLine);
     }

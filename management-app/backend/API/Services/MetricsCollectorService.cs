@@ -1,4 +1,5 @@
 using API.Storage;
+using System.Globalization;
 
 namespace API.Services;
 
@@ -10,10 +11,19 @@ public sealed class MetricsCollectorService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var now = DateTime.UtcNow;
+        var nextCollection = now.AddMinutes(5 - now.Minute % 5);
+        nextCollection = new DateTime(nextCollection.Year, nextCollection.Month, nextCollection.Day,
+            nextCollection.Hour, nextCollection.Minute, 0, DateTimeKind.Utc);
+        if (nextCollection < now.AddMinutes(1))
+            nextCollection = nextCollection.AddMinutes(5);
+
+        await Task.Delay(nextCollection - now, stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(300), stoppingToken);
             await CollectAsync();
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
         }
     }
 
@@ -26,7 +36,7 @@ public sealed class MetricsCollectorService(
 
             var users = await userRepo.GetAllAsync();
             var userById = users.ToDictionary(u => u.Secret, u => u.Id);
-            var date = DateTime.UtcNow.ToString("yyyyMMdd");
+            var date = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 
             foreach (var (secret, totalBytes) in stats)
             {

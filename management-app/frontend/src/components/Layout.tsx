@@ -20,7 +20,6 @@ export function Layout({ onLogout }: LayoutProps) {
         <div className={styles.links}>
           <NavLink to="/users" className={({ isActive }) => isActive ? styles.active : ''}>Users</NavLink>
           <NavLink to="/usage" className={({ isActive }) => isActive ? styles.active : ''}>Usage</NavLink>
-          <NavLink to="/config" className={({ isActive }) => isActive ? styles.active : ''}>My Config</NavLink>
         </div>
         <button className={styles.logout} onClick={handleLogout}>Logout</button>
       </nav>

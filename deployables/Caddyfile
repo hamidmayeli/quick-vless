@@ -1,9 +1,11 @@
 # Caddy with the layer4 module (see Dockerfile.caddy).
 #
 # Port 443 is shared between the management UI and Xray VPN via SNI routing:
-#   - {$MANAGEMENT_DOMAIN}  → TLS terminated by Caddy → management app
+#   - {$MANAGEMENT_DOMAIN}  → TCP passthrough → Caddy HTTPS on :8443 → management app
 #   - anything else (e.g. REALITY SNI target) → TCP passthrough → xray:443
 #
+# Both routes are raw TCP passthrough — no layer4.handlers.http needed.
+# Caddy's built-in HTTPS server on :8443 handles TLS termination and ACME.
 # Xray is never published to the host; it only exists on the internal Docker network.
 
 {
@@ -14,9 +16,8 @@
       }
 
       route @management {
-        tls               # Caddy terminates TLS, auto-provisions cert via ACME
-        http {
-          reverse_proxy app:8080
+        proxy {
+          upstream localhost:8443
         }
       }
 
@@ -27,6 +28,13 @@
       }
     }
   }
+}
+
+# HTTPS for the management UI — reached via SNI passthrough from port 443 above.
+# Bound to loopback only; not reachable externally without going through layer4.
+https://{$MANAGEMENT_DOMAIN}:8443 {
+  bind 127.0.0.1
+  reverse_proxy app:8080
 }
 
 # HTTP-01 ACME challenges + redirect to HTTPS

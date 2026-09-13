@@ -22,7 +22,7 @@ services:
     depends_on:
       - xray
     volumes:
-      - app-data:/data          # users.json, admins.json, usage_history/
+      - ./data/app:/data        # users.json, admins.json, usage_history/
       - ./xray:/xray-config     # startup sync patches config.json here
     environment:
       - Jwt__Secret=${JWT_SECRET}
@@ -30,7 +30,6 @@ services:
       - Storage__UsersPath=/data/users.json
       - Storage__AdminsPath=/data/admins.json
       - Storage__UsageHistoryDir=/data/usage_history
-      - Xray__BinaryPath=/usr/bin/xray
       - Xray__ConfigPath=/xray-config/config.json
       - Xray__StatsServer=xray:10085
       - Xray__InboundTag=vless-in
@@ -38,7 +37,7 @@ services:
       - Xray__Port=443
       - Xray__RealityPublicKey=${XRAY_REALITY_PUBLIC_KEY}
       - Xray__RealityShortId=${XRAY_REALITY_SHORT_ID}
-      - Xray__Sni=${XRAY_SNI:-www.microsoft.com}
+      - Xray__Sni=${XRAY_SNI:-dl.google.com}
       - Xray__Fingerprint=${XRAY_FINGERPRINT:-chrome}
 
   # ── Caddy — SNI router + reverse proxy ───────────────────────────────────────
@@ -46,9 +45,6 @@ services:
   # Port 443: routes by SNI — management domain → app, everything else → xray.
   # Port 80:  ACME HTTP-01 challenges + redirect to HTTPS.
   caddy:
-    build:
-      context: .
-      dockerfile: Dockerfile.caddy
     image: hamidmayeli/quick-vless-caddy:latest
     restart: unless-stopped
     networks:
@@ -61,15 +57,10 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config
     environment:
       - MANAGEMENT_DOMAIN=${MANAGEMENT_DOMAIN}
-
-volumes:
-  app-data:
-  caddy-data:
-  caddy-config:
 
 networks:
   vpn:

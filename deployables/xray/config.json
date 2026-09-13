@@ -1,21 +1,16 @@
 {
   "log": {
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log",
     "loglevel": "warning"
   },
+  "stats": {},
   "api": {
     "tag": "api",
-    "services": ["HandlerService", "StatsService"]
+    "services": [
+      "HandlerService",
+      "StatsService"
+    ]
   },
   "inbounds": [
-    {
-      "tag": "api-in",
-      "listen": "0.0.0.0",
-      "port": 10085,
-      "protocol": "dokodemo-door",
-      "settings": { "address": "127.0.0.1" }
-    },
     {
       "tag": "vless-in",
       "listen": "0.0.0.0",
@@ -30,43 +25,60 @@
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "dest": "www.microsoft.com:443",
+          "dest": "YOUR_SNI:443",
           "xver": 0,
-          "serverNames": ["www.microsoft.com"],
+          "serverNames": [
+            "YOUR_SNI"
+          ],
           "privateKey": "YOUR_PRIVATE_KEY",
           "shortIds": ["YOUR_SHORT_ID"]
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
       }
+    },
+    {
+      "listen": "0.0.0.0",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
-    { "protocol": "freedom", "tag": "direct" },
-    { "protocol": "blackhole", "tag": "block" }
-  ],
-  "stats": {},
-  "policy": {
-    "levels": {
-      "0": { "statsUserUplink": true, "statsUserDownlink": true }
+    {
+      "protocol": "freedom",
+      "tag": "direct"
     },
-    "system": {
-      "statsInboundUplink": true,
-      "statsInboundDownlink": true,
-      "statsOutboundUplink": true,
-      "statsOutboundDownlink": true
+    {
+      "protocol": "blackhole",
+      "tag": "block"
     }
-  },
+  ],
   "routing": {
-    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
-        "inboundTag": ["api-in"],
+        "inboundTag": [
+          "api"
+        ],
         "outboundTag": "api"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ads-all"
+        ],
+        "outboundTag": "block"
       }
     ]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    }
   }
 }

@@ -7,6 +7,7 @@ public sealed class AdminRepository(IConfiguration config)
 {
     private readonly string _path = config["Storage:AdminsPath"] ?? "/data/admins.json";
     private static readonly JsonSerializerOptions _json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+    private static readonly SemaphoreSlim _lock = new(1, 1);
 
     public async Task<List<Admin>> GetAllAsync()
     {
@@ -23,12 +24,20 @@ public sealed class AdminRepository(IConfiguration config)
 
     public async Task UpdateAsync(Admin updated)
     {
-        var admins = await GetAllAsync();
-        var idx = admins.FindIndex(a => string.Equals(a.Username, updated.Username, StringComparison.OrdinalIgnoreCase));
-        if (idx >= 0) admins[idx] = updated;
-        else admins.Add(updated);
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        await using var stream = File.Create(_path);
-        await JsonSerializer.SerializeAsync(stream, admins, _json);
+        await _lock.WaitAsync();
+        try
+        {
+            var admins = await GetAllAsync();
+            var idx = admins.FindIndex(a => string.Equals(a.Username, updated.Username, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0) admins[idx] = updated;
+            else admins.Add(updated);
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            await using var stream = File.Create(_path);
+            await JsonSerializer.SerializeAsync(stream, admins, _json);
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 }

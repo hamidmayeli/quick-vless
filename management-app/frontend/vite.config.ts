@@ -8,7 +8,6 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Easy Xray',
         short_name: 'EasyXray',
@@ -17,9 +16,8 @@ export default defineConfig({
         background_color: '#0f0f23',
         display: 'standalone',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: 'icon-192.png', sizes: '192x192 512x512', type: 'image/png' },
+          { src: 'icon-192.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {

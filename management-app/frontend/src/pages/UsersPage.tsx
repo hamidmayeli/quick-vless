@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import type { User } from '@/types'
+import { formatQuota, parseQuota } from '@/services/quota'
 import styles from './UsersPage.module.css'
 
-type UserForm = Omit<User, 'id' | 'secret'>
+type UserForm = Omit<User, 'id' | 'secret' | 'quota'> & { quota: string }
 
 const EMPTY_FORM: UserForm = {
   name: '',
-  quota: null,
+  quota: '',
   expiry: null,
   single_connection: false,
   enabled: true,
@@ -20,26 +21,35 @@ export function UsersPage() {
   const [form, setForm] = useState<UserForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function openCreate() {
     setForm(EMPTY_FORM)
+    setFormError(null)
     setCreating(true)
     setEditing(null)
   }
 
   function openEdit(user: User) {
     setEditing(user)
-    setForm({ name: user.name, quota: user.quota, expiry: user.expiry, single_connection: user.single_connection, enabled: user.enabled })
+    setForm({ name: user.name, quota: user.quota == null ? '' : formatQuota(user.quota), expiry: user.expiry, single_connection: user.single_connection, enabled: user.enabled })
+    setFormError(null)
     setCreating(false)
   }
 
   function closeForm() { setEditing(null); setCreating(false) }
 
   async function handleSave() {
+    const quota = parseQuota(form.quota)
+    if (form.quota.trim() && quota == null) {
+      setFormError('Enter a quota such as 10GB, 500MB, or 1TB.')
+      return
+    }
     setSaving(true)
     try {
-      if (creating) await create(form)
-      else if (editing) await update(editing.id, form)
+      const data = { ...form, quota }
+      if (creating) await create(data)
+      else if (editing) await update(editing.id, data)
       closeForm()
     } finally {
       setSaving(false)
@@ -77,9 +87,9 @@ export function UsersPage() {
               <input className={styles.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </label>
             <label className={styles.field}>
-              Quota (GB)
-              <input className={styles.input} type="number" min="0" value={form.quota ?? ''} placeholder="Unlimited"
-                onChange={(e) => setForm({ ...form, quota: e.target.value ? Number(e.target.value) : null })} />
+              Quota
+              <input className={styles.input} type="text" inputMode="text" value={form.quota} placeholder="Unlimited (e.g. 25GB)"
+                onChange={(e) => { setForm({ ...form, quota: e.target.value }); setFormError(null) }} />
             </label>
             <label className={styles.field}>
               Expiry date
@@ -95,6 +105,7 @@ export function UsersPage() {
               Enabled
             </label>
           </div>
+          {formError && <p className={styles.error}>{formError}</p>}
           <div className={styles.formActions}>
             <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
             <button className={styles.btnGhost} onClick={closeForm}>Cancel</button>
@@ -102,43 +113,45 @@ export function UsersPage() {
         </div>
       )}
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Quota</th>
-            <th>Expiry</th>
-            <th>Single conn.</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u.id} className={!u.enabled ? styles.disabled : ''}>
-              <td>{u.name}</td>
-              <td>{u.quota != null ? `${u.quota} GB` : '∞'}</td>
-              <td>{u.expiry ?? '—'}</td>
-              <td>{u.single_connection ? 'Yes' : 'No'}</td>
-              <td>
-                <span className={u.enabled ? styles.badgeOn : styles.badgeOff}>
-                  {u.enabled ? 'Active' : 'Disabled'}
-                </span>
-              </td>
-              <td className={styles.actions}>
-                <button className={styles.btnSmall} onClick={() => openEdit(u)}>Edit</button>
-                <button className={styles.btnSmall} onClick={() => toggle(u)}>
-                  {u.enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button className={styles.btnSmall} onClick={() => void handleCopyConfigUrl(u.id)}>
-                  {copiedId === u.id ? 'Copied!' : 'Copy Config URL'}
-                </button>
-                <button className={`${styles.btnSmall} ${styles.danger}`} onClick={() => handleDelete(u.id)}>Delete</button>
-              </td>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Quota</th>
+              <th>Expiry</th>
+              <th>Single conn.</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className={!u.enabled ? styles.disabled : ''}>
+                <td data-label="Name">{u.name}</td>
+                <td data-label="Quota">{formatQuota(u.quota)}</td>
+                <td data-label="Expiry">{u.expiry ?? '—'}</td>
+                <td data-label="Single conn.">{u.single_connection ? 'Yes' : 'No'}</td>
+                <td data-label="Status">
+                  <span className={u.enabled ? styles.badgeOn : styles.badgeOff}>
+                    {u.enabled ? 'Active' : 'Disabled'}
+                  </span>
+                </td>
+                <td data-label="Actions" className={styles.actions}>
+                  <button className={styles.btnSmall} onClick={() => openEdit(u)}>Edit</button>
+                  <button className={styles.btnSmall} onClick={() => toggle(u)}>
+                    {u.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button className={styles.btnSmall} onClick={() => void handleCopyConfigUrl(u.id)}>
+                    {copiedId === u.id ? 'Copied!' : 'Copy Config URL'}
+                  </button>
+                  <button className={`${styles.btnSmall} ${styles.danger}`} onClick={() => handleDelete(u.id)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {users.length === 0 && <p className={styles.state}>No users yet. Add one above.</p>}
     </div>

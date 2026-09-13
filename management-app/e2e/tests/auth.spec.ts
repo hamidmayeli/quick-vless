@@ -29,7 +29,7 @@ test.describe('Auth flow', () => {
     await page.getByRole('button', { name: /sign in/i }).click()
 
     await expect(page).toHaveURL('/login')
-    await expect(page.locator('p')).toContainText(/invalid username or password/i)
+    await expect(page.getByText(/invalid username or password/i)).toBeVisible()
   })
 
   test('logout clears session and redirects to login', async ({ page }) => {

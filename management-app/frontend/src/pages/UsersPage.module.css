@@ -125,3 +125,81 @@
 }
 .btnSmall:hover { border-color: #7c7cff; color: #7c7cff; }
 .btnSmall.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .formActions {
+    flex-wrap: wrap;
+  }
+
+  .formCard {
+    padding: 1rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .tableWrap {
+    overflow-x: visible;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .table td {
+    border-bottom: 1px solid #1e1e38;
+    padding: 0.4rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #c0c0e0;
+  }
+
+  .table td:last-child {
+    border-bottom: none;
+    padding-top: 0.5rem;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
+    color: #6060a0;
+    font-weight: 500;
+    width: 90px;
+    flex-shrink: 0;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+}

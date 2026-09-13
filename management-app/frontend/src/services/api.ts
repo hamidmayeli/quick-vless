@@ -10,9 +10,11 @@ function authHeaders(): HeadersInit {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { ...init, headers: { ...authHeaders(), ...init?.headers } })
   if (res.status === 401) {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    window.location.href = '/login'
+    if (localStorage.getItem('access_token')) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+    }
     throw new Error('Unauthorized')
   }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)

@@ -1,7 +1,10 @@
 # Build Caddy with the layer4 module for SNI-based TCP routing.
 # This allows port 443 to be shared between the management UI and Xray VPN.
-FROM caddy:2-builder AS builder
-RUN xcaddy build --with github.com/mholt/caddy-l4
+FROM --platform=$BUILDPLATFORM caddy:2-builder AS builder
+ARG TARGETARCH
+RUN --mount=type=cache,id=easy-xray-caddy-mod,target=/go/pkg/mod \
+	--mount=type=cache,id=easy-xray-caddy-build,target=/root/.cache/go-build \
+	GOOS=linux GOARCH=$TARGETARCH xcaddy build --with github.com/mholt/caddy-l4
 
 FROM caddy:2-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

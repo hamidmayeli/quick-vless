@@ -33,6 +33,18 @@ public class UsageRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task AppendWithTimestamp_UsesDateForFileAndPreservesTimestampInLine()
+    {
+        var repo = CreateRepo();
+        var timestamp = "2026-09-01T11:55:00.0000000Z";
+        await repo.AppendAsync(new UsageRecord { UserId = "u1", Date = timestamp, Uplink = 0, Downlink = 0, Total = 600 });
+
+        var file = Path.Combine(_tempDir, "20260901.csv");
+        Assert.True(File.Exists(file));
+        Assert.Equal($"u1,{timestamp},0,0,600", (await File.ReadAllLinesAsync(file))[0]);
+    }
+
+    [Fact]
     public async Task GetCumulativeTotals_SumsCorrectly()
     {
         var repo = CreateRepo();

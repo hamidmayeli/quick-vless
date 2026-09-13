@@ -1,18 +1,27 @@
-# ── Stage 1: Backend — restore, build, test, publish ──────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+# ── Stage 1: Backend — build natively, then publish for the target platform ───
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+ARG TARGETARCH
 WORKDIR /src
+
+# Keep restore cacheable when application source changes.
+COPY backend/OutlineManager.slnx ./
+COPY backend/API/API.csproj API/
+COPY backend/API.Tests/API.Tests.csproj API.Tests/
+RUN dotnet restore API/API.csproj -a $TARGETARCH
+
 COPY backend/ ./
-RUN dotnet restore OutlineManager.slnx
-RUN dotnet build   OutlineManager.slnx -c Release --no-restore
-RUN dotnet test    OutlineManager.slnx -c Release --no-build
-RUN dotnet publish API/API.csproj      -c Release --no-build -o /publish
+RUN dotnet build -c Release
+RUN dotnet test API.Tests/API.Tests.csproj -c Release --no-build
+RUN dotnet publish API/API.csproj -c Release -a $TARGETARCH -o /publish
 
 # ── Stage 2: Frontend ──────────────────────────────────────────────────────────
-FROM node:26-slim AS frontend-build
+FROM --platform=$BUILDPLATFORM node:26-slim AS frontend-build
 RUN npm install -g pnpm
 WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=quick-vless-pnpm,target=/root/.local/share/pnpm/store \
+	pnpm config set store-dir /root/.local/share/pnpm/store && \
+	pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
 

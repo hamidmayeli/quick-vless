@@ -18,6 +18,22 @@ async function loginAndNavigate(page: Page) {
 }
 
 test.describe('User management', () => {
+  test.beforeEach(async ({ request }) => {
+    const res = await request.post('/api/v1/auth/login', {
+      data: { username: 'admin', password: 'password123' },
+    })
+    const { access_token } = await res.json()
+    const usersRes = await request.get('/api/v1/users', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    })
+    const users = await usersRes.json()
+    for (const user of users) {
+      await request.delete(`/api/v1/users/${user.id}`, {
+        headers: { Authorization: `Bearer ${access_token}` },
+      })
+    }
+  })
+
   test('users page shows empty state message', async ({ page }) => {
     await loginAndNavigate(page)
     await expect(page.locator('text=No users yet')).toBeVisible()
@@ -33,6 +49,29 @@ test.describe('User management', () => {
     await page.getByRole('button', { name: /^save$/i }).click()
 
     await expect(page.locator('text=E2E TestUser')).toBeVisible()
+  })
+
+  test('accepts a human-readable quota and stores bytes', async ({ page }) => {
+    await loginAndNavigate(page)
+
+    await page.getByRole('button', { name: /add user/i }).click()
+    await page.locator('input').nth(1).fill('10MG')
+    await page.locator('input').first().fill('ByteQuotaUser')
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(page.locator('text=ByteQuotaUser')).toBeVisible()
+    await expect(page.locator('text=10 MB')).toBeVisible()
+  })
+
+  test('rejects an invalid quota value', async ({ page }) => {
+    await loginAndNavigate(page)
+
+    await page.getByRole('button', { name: /add user/i }).click()
+    await page.locator('input').nth(1).fill('ten gigabytes')
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(page.getByText(/enter a quota such as/i)).toBeVisible()
+    await expect(page.getByText('New User')).toBeVisible()
   })
 
   test('edit user updates name', async ({ page }) => {

@@ -79,3 +79,13 @@
 
 .submit:disabled { opacity: 0.5; cursor: not-allowed; }
 .submit:hover:not(:disabled) { opacity: 0.85; }
+
+@media (max-width: 480px) {
+  .card {
+    padding: 1.75rem 1.25rem;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    max-width: 100%;
+  }
+}

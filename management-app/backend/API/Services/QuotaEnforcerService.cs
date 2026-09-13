@@ -6,10 +6,9 @@ public sealed class QuotaEnforcerService(
     UserRepository userRepo,
     UsageRepository usageRepo,
     XrayService xray,
+    XrayConfigFileService configFile,
     ILogger<QuotaEnforcerService> logger) : BackgroundService
 {
-    private const double BytesPerGb = 1_073_741_824.0;
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -21,23 +20,44 @@ public sealed class QuotaEnforcerService(
 
     private async Task EnforceAsync()
     {
+        var changed = false;
         try
         {
             var users = await userRepo.GetAllAsync();
             var totals = await usageRepo.GetCumulativeTotalsByUserAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-            foreach (var user in users.Where(u => u.Enabled && u.Quota.HasValue))
+            foreach (var user in users.Where(u => u.Enabled))
             {
-                if (!totals.TryGetValue(user.Id, out var totalBytes)) continue;
-                var totalGb = totalBytes / BytesPerGb;
-                if (totalGb < user.Quota!.Value) continue;
+                bool shouldDisable = false;
 
-                user.Enabled = false;
-                await userRepo.UpdateAsync(user);
-                await xray.RemoveUserAsync(user);
-                logger.LogInformation("User {Name} ({Id}) quota exceeded ({TotalGb:F2}/{Quota} GB). Disabled.",
-                    user.Name, user.Id, totalGb, user.Quota);
+                if (user.Expiry.HasValue && today >= user.Expiry.Value)
+                {
+                    logger.LogInformation("User {Name} ({Id}) expired on {Expiry}. Disabled.",
+                        user.Name, user.Id, user.Expiry);
+                    shouldDisable = true;
+                }
+                else if (user.Quota.HasValue && totals.TryGetValue(user.Id, out var totalBytes))
+                {
+                    if (totalBytes >= user.Quota.Value)
+                    {
+                        logger.LogInformation("User {Name} ({Id}) quota exceeded ({TotalBytes}/{Quota} bytes). Disabled.",
+                            user.Name, user.Id, totalBytes, user.Quota);
+                        shouldDisable = true;
+                    }
+                }
+
+                if (shouldDisable)
+                {
+                    user.Enabled = false;
+                    await userRepo.UpdateAsync(user);
+                    await xray.RemoveUserAsync(user);
+                    changed = true;
+                }
             }
+
+            if (changed)
+                await configFile.SyncAsync();
         }
         catch (Exception ex)
         {

@@ -44,6 +44,7 @@ builder.Services.AddAuthorization();
 
 // Xray services
 builder.Services.AddSingleton<XrayService>();
+builder.Services.AddSingleton<XrayConfigFileService>();
 builder.Services.AddSingleton<VlessUrlGenerator>();
 
 // Hosted services

@@ -49,8 +49,8 @@ public static class AuthEndpoints
 
                 var access = tokens.CreateAccessToken(admin.Username);
                 var (refresh, expiry) = tokens.CreateRefreshToken();
-                admin.RefreshToken = refresh;
-                admin.RefreshTokenExpiry = expiry;
+                admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow);
+                admin.RefreshTokens.Add(new() { Token = refresh, Expiry = expiry });
                 await admins.UpdateAsync(admin);
 
                 logger.LogInformation("Login successful for {Username}", admin.Username);
@@ -74,8 +74,8 @@ public static class AuthEndpoints
 
             var access = tokens.CreateAccessToken(admin.Username);
             var (refresh, expiry) = tokens.CreateRefreshToken();
-            admin.RefreshToken = refresh;
-            admin.RefreshTokenExpiry = expiry;
+            admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow || rt.Token == req.RefreshToken);
+            admin.RefreshTokens.Add(new() { Token = refresh, Expiry = expiry });
             await admins.UpdateAsync(admin);
 
             logger.LogInformation("Token refreshed for {Username}", admin.Username);

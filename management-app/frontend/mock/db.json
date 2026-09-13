@@ -1,28 +1,25 @@
 {
   "users": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "id": "user-1",
       "name": "Alice",
-      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567801",
-      "quota": 50,
-      "expiry": "2027-01-01",
+      "quota": 53687091200,
+      "expiry": "2027-06-01",
       "single_connection": false,
       "enabled": true
     },
     {
-      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "id": "user-2",
       "name": "Bob",
-      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567802",
-      "quota": 100,
+      "quota": null,
       "expiry": null,
       "single_connection": true,
       "enabled": true
     },
     {
-      "id": "550e8400-e29b-41d4-a716-446655440003",
-      "name": "Charlie",
-      "secret": "a1b2c3d4-e5f6-7890-abcd-ef1234567803",
-      "quota": 20,
+      "id": "user-3",
+      "name": "Carol",
+      "quota": 10737418240,
       "expiry": "2026-12-31",
       "single_connection": false,
       "enabled": false
@@ -30,49 +27,42 @@
   ],
   "usage": [
     {
-      "user_id": "550e8400-e29b-41d4-a716-446655440001",
-      "date": "20260901",
+      "id": "r-1",
+      "user_id": "user-1",
+      "date": "2026-09-14",
       "uplink": 1073741824,
-      "downlink": 5368709120,
-      "total": 6442450944
+      "downlink": 3221225472,
+      "total": 4294967296
     },
     {
-      "user_id": "550e8400-e29b-41d4-a716-446655440001",
-      "date": "20260902",
+      "id": "r-2",
+      "user_id": "user-2",
+      "date": "2026-09-14",
       "uplink": 536870912,
-      "downlink": 2147483648,
-      "total": 2684354560
+      "downlink": 1610612736,
+      "total": 2147483648
     },
     {
-      "user_id": "550e8400-e29b-41d4-a716-446655440002",
-      "date": "20260901",
-      "uplink": 2147483648,
-      "downlink": 10737418240,
-      "total": 12884901888
-    },
-    {
-      "user_id": "550e8400-e29b-41d4-a716-446655440003",
-      "date": "20260901",
-      "uplink": 107374182,
-      "downlink": 536870912,
-      "total": 644245094
+      "id": "r-3",
+      "user_id": "user-1",
+      "date": "2026-09-15",
+      "uplink": 268435456,
+      "downlink": 805306368,
+      "total": 1073741824
     }
   ],
-  "config": [
+  "configs": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440001",
-      "url": "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567801@example.com:443?type=tcp&security=reality&pbk=MOCK_PUBLIC_KEY&fp=chrome&sni=example.com&sid=abc123&spx=%2F&flow=xtls-rprx-vision#Alice"
+      "id": "user-1",
+      "url": "vless://user-1@mock-server.example.com:443?type=tcp&security=reality&pbk=mock-public-key&fp=chrome&sni=dl.google.com&sid=ab12cd34#Alice"
     },
     {
-      "id": "550e8400-e29b-41d4-a716-446655440002",
-      "url": "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567802@example.com:443?type=tcp&security=reality&pbk=MOCK_PUBLIC_KEY&fp=chrome&sni=example.com&sid=abc123&spx=%2F&flow=xtls-rprx-vision#Bob"
-    }
-  ],
-  "auth": [
+      "id": "user-2",
+      "url": "vless://user-2@mock-server.example.com:443?type=tcp&security=reality&pbk=mock-public-key&fp=chrome&sni=dl.google.com&sid=ab12cd34#Bob"
+    },
     {
-      "id": "login",
-      "access_token": "mock-access-token-abc123",
-      "refresh_token": "mock-refresh-token-xyz789"
+      "id": "user-3",
+      "url": "vless://user-3@mock-server.example.com:443?type=tcp&security=reality&pbk=mock-public-key&fp=chrome&sni=dl.google.com&sid=ab12cd34#Carol"
     }
   ]
 }

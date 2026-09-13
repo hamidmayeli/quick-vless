@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package xray.common.serial;
+
+option csharp_namespace = "Xray.Common.Serial";
+
+message TypedMessage {
+  string type = 1;
+  bytes value = 2;
+}

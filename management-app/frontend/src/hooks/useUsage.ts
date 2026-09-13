@@ -34,7 +34,7 @@ export function useUsage(users: User[]) {
       userId: user.id,
       name: user.name,
       totalGb: bytesToGb(totalBytes),
-      quotaGb: user.quota,
+      quotaGb: user.quota == null ? null : bytesToGb(user.quota),
       records: userRecords,
     }
   })

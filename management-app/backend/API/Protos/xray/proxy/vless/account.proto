@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package xray.proxy.vless;
+
+option csharp_namespace = "Xray.Proxy.Vless";
+
+message Account {
+  string id = 1;
+  string flow = 2;
+  string encryption = 3;
+}

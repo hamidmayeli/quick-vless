@@ -23,6 +23,7 @@ public static class UsersEndpoints
             CreateUserRequest req,
             UserRepository repo,
             XrayService xray,
+            XrayConfigFileService configFile,
             ILogger<Log> logger) =>
         {
             var user = new User
@@ -37,6 +38,7 @@ public static class UsersEndpoints
             };
             await repo.AddAsync(user);
             if (user.Enabled) await xray.AddUserAsync(user);
+            await configFile.SyncAsync();
             logger.LogInformation("POST /users — created user {Name} id={Id} enabled={Enabled}", user.Name, user.Id, user.Enabled);
             return Results.Created($"/users/{user.Id}", user);
         });
@@ -46,6 +48,7 @@ public static class UsersEndpoints
             UpdateUserRequest req,
             UserRepository repo,
             XrayService xray,
+            XrayConfigFileService configFile,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("PUT /users/{Id}", id);
@@ -67,6 +70,7 @@ public static class UsersEndpoints
             if (!wasEnabled && existing.Enabled) await xray.AddUserAsync(existing);
             else if (wasEnabled && !existing.Enabled) await xray.RemoveUserAsync(existing);
 
+            await configFile.SyncAsync();
             logger.LogInformation("PUT /users/{Id} — updated, enabled={Enabled}", id, existing.Enabled);
             return Results.Ok(existing);
         });
@@ -75,6 +79,7 @@ public static class UsersEndpoints
             string id,
             UserRepository repo,
             XrayService xray,
+            XrayConfigFileService configFile,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("DELETE /users/{Id}", id);
@@ -86,6 +91,7 @@ public static class UsersEndpoints
             }
             if (user.Enabled) await xray.RemoveUserAsync(user);
             await repo.DeleteAsync(id);
+            await configFile.SyncAsync();
             logger.LogInformation("DELETE /users/{Id} — deleted {Name}", id, user.Name);
             return Results.NoContent();
         });
@@ -93,14 +99,14 @@ public static class UsersEndpoints
 
     public record CreateUserRequest(
         string Name,
-        double? Quota,
+        long? Quota,
         DateOnly? Expiry,
         bool SingleConnection,
         bool Enabled);
 
     public record UpdateUserRequest(
         string? Name,
-        double? Quota,
+        long? Quota,
         DateOnly? Expiry,
         bool? SingleConnection,
         bool? Enabled);

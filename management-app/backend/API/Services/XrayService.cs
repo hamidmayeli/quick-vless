@@ -1,79 +1,134 @@
 using API.Models;
+using Google.Protobuf;
+using Grpc.Net.Client;
+using Xray.App.Proxyman.Command;
+using Xray.App.Stats.Command;
+using Xray.Common.Serial;
+using Xray.Proxy.Vless;
 
 namespace API.Services;
 
-public sealed class XrayService(IConfiguration config, ILogger<XrayService> logger)
+public sealed class XrayService : IDisposable
 {
-    private readonly string _xrayBin = config["Xray:BinaryPath"] ?? "xray";
-    private readonly string _configPath = config["Xray:ConfigPath"] ?? "/usr/local/etc/xray/config.json";
-    private readonly string _statsServer = config["Xray:StatsServer"] ?? "127.0.0.1:10085";
-    private readonly string _inboundTag = config["Xray:InboundTag"] ?? "vless-in";
+    private readonly GrpcChannel _channel;
+    private readonly StatsService.StatsServiceClient _statsClient;
+    private readonly HandlerService.HandlerServiceClient _handlerClient;
+    private readonly string _inboundTag;
+    private readonly ILogger<XrayService> _logger;
+
+    public XrayService(IConfiguration config, ILogger<XrayService> logger)
+    {
+        _logger = logger;
+        var statsServer = config["Xray:StatsServer"] ?? "127.0.0.1:10085";
+        _inboundTag = config["Xray:InboundTag"] ?? "vless-in";
+        _channel = GrpcChannel.ForAddress($"http://{statsServer}");
+        _statsClient = new StatsService.StatsServiceClient(_channel);
+        _handlerClient = new HandlerService.HandlerServiceClient(_channel);
+    }
 
     public async Task<bool> AddUserAsync(User user)
     {
-        var json = $$"""{"id":"{{user.Secret}}","flow":"xtls-rprx-vision"}""";
-        return await RunAsync("api", "command", "HandlerService.AddInbound",
-            "--server", _statsServer,
-            "-name", _inboundTag,
-            "-user", json);
+        try
+        {
+            var account = new Account { Id = user.Secret, Flow = "xtls-rprx-vision" };
+            var protoUser = new Xray.Common.Protocol.User
+            {
+                Email = user.Secret,
+                Account = new TypedMessage
+                {
+                    Type = "xray.proxy.vless.Account",
+                    Value = ByteString.CopyFrom(account.ToByteArray()),
+                }
+            };
+            var addOp = new AddUserOperation { User = protoUser };
+            await _handlerClient.AlterInboundAsync(new AlterInboundRequest
+            {
+                Tag = _inboundTag,
+                Operation = new TypedMessage
+                {
+                    Type = "xray.app.proxyman.command.AddUserOperation",
+                    Value = ByteString.CopyFrom(addOp.ToByteArray()),
+                }
+            });
+            return true;
+        }
+        catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.Unavailable)
+        {
+            _logger.LogWarning("Xray gRPC unavailable — AddUser skipped for user {Id}", user.Id);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AddUser gRPC call failed for user {Id}", user.Id);
+            return false;
+        }
     }
 
     public async Task<bool> RemoveUserAsync(User user)
     {
-        return await RunAsync("api", "command", "HandlerService.RemoveUser",
-            "--server", _statsServer,
-            "-tag", _inboundTag,
-            "-email", user.Secret);
+        try
+        {
+            var removeOp = new RemoveUserOperation { Email = user.Secret };
+            await _handlerClient.AlterInboundAsync(new AlterInboundRequest
+            {
+                Tag = _inboundTag,
+                Operation = new TypedMessage
+                {
+                    Type = "xray.app.proxyman.command.RemoveUserOperation",
+                    Value = ByteString.CopyFrom(removeOp.ToByteArray()),
+                }
+            });
+            return true;
+        }
+        catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.Unavailable)
+        {
+            _logger.LogWarning("Xray gRPC unavailable — RemoveUser skipped for user {Id}", user.Id);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RemoveUser gRPC call failed for user {Id}", user.Id);
+            return false;
+        }
     }
 
     public async Task<Dictionary<string, long>> QueryStatsAsync()
     {
-        var result = new Dictionary<string, long>();
-        var (output, success) = await RunWithOutputAsync("api", "statsquery",
-            "--server", _statsServer, "-pattern", "user");
-        if (!success) return result;
-
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        try
         {
-            // stat: name: "user>>>secret>>>traffic>>>downlink"  value: 12345
-            var parts = line.Split(['"'], StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2) continue;
-            var nameParts = parts[1].Split(">>>", StringSplitOptions.RemoveEmptyEntries);
-            if (nameParts.Length < 4) continue;
-            var userId = nameParts[1];
-            if (!long.TryParse(line.Split("value:").LastOrDefault()?.Trim(), out var bytes)) continue;
-            result.TryGetValue(userId, out var existing);
-            result[userId] = existing + bytes;
+            var response = await _statsClient.QueryStatsAsync(new QueryStatsRequest
+            {
+                Pattern = "user",
+                Reset = true,
+            });
+            return ParseStats(response.Stat);
+        }
+        catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.Unavailable)
+        {
+            _logger.LogWarning("Xray gRPC unavailable — QueryStats returned empty");
+            return [];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "QueryStats gRPC call failed");
+            return [];
+        }
+    }
+
+    public static Dictionary<string, long> ParseStats(IEnumerable<Stat> stats)
+    {
+        var result = new Dictionary<string, long>();
+        foreach (var stat in stats)
+        {
+            // stat.Name format: "user>>>email>>>traffic>>>uplink" or ">>>downlink"
+            var parts = stat.Name.Split(">>>", StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 4) continue;
+            var email = parts[1];
+            result.TryGetValue(email, out var existing);
+            result[email] = existing + stat.Value;
         }
         return result;
     }
 
-    private async Task<bool> RunAsync(params string[] args)
-    {
-        var (_, success) = await RunWithOutputAsync(args);
-        return success;
-    }
-
-    private async Task<(string Output, bool Success)> RunWithOutputAsync(params string[] args)
-    {
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo(_xrayBin)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            foreach (var arg in args) psi.ArgumentList.Add(arg);
-            using var proc = System.Diagnostics.Process.Start(psi)!;
-            var output = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
-            return (output, proc.ExitCode == 0);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Xray CLI invocation failed: {Args}", string.Join(' ', args));
-            return (string.Empty, false);
-        }
-    }
+    public void Dispose() => _channel.Dispose();
 }

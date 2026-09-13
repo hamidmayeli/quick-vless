@@ -13,7 +13,7 @@ async function loginAndNavigate(page: Page, path: string) {
     },
     { at: access_token, rt: refresh_token },
   )
-  await page.reload()
+  await page.goto(path)
   await expect(page).toHaveURL(path)
 }
 
@@ -34,7 +34,7 @@ test.describe('Usage page', () => {
       headers: { Authorization: `Bearer ${access_token}` },
       data: {
         name: 'UsageTestUser',
-        quota: 100,
+        quota: 100 * 1024 * 1024 * 1024,
         expiry: null,
         single_connection: false,
         enabled: false,
@@ -43,6 +43,6 @@ test.describe('Usage page', () => {
     await userRes.json()
 
     await loginAndNavigate(page, '/usage')
-    await expect(page.locator('text=UsageTestUser')).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: 'UsageTestUser' }).first()).toBeVisible()
   })
 })
