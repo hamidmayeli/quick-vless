@@ -38,6 +38,26 @@ test.describe('User management', () => {
     await expect(page.locator('text=No users yet')).toBeVisible()
   })
 
+  test('refreshes users when the page becomes visible again', async ({ page }) => {
+    let userRequests = 0
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/v1/users') && request.method() === 'GET') userRequests += 1
+    })
+
+    await loginAndNavigate(page)
+    await expect(page.locator('text=No users yet')).toBeVisible()
+    const requestsBeforeReconnect = userRequests
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+      document.dispatchEvent(new Event('visibilitychange'))
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    await expect.poll(() => userRequests).toBeGreaterThan(requestsBeforeReconnect)
+  })
+
   test('add user opens form and creates user', async ({ page }) => {
     await loginAndNavigate(page)
 

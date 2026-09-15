@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { usersApi } from '@/services/api'
 import type { User } from '@/types'
+import { useRefreshOnReconnect } from './useRefreshOnReconnect'
 
 export function useUsers() {
   const [users, setUsers] = useState<User[]>([])
@@ -20,6 +21,7 @@ export function useUsers() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useRefreshOnReconnect(load)
 
   const create = useCallback(async (data: Omit<User, 'id'>) => {
     setLoading(true)
