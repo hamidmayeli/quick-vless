@@ -4,14 +4,13 @@ async function loginAndNavigate(page: Page) {
   const res = await page.request.post('/api/v1/auth/login', {
     data: { username: 'admin', password: 'password123' },
   })
-  const { access_token, refresh_token } = await res.json()
+  const { access_token } = await res.json()
   await page.goto('/users')
   await page.evaluate(
-    ({ at, rt }) => {
+    ({ at }) => {
       localStorage.setItem('access_token', at)
-      localStorage.setItem('refresh_token', rt)
     },
-    { at: access_token, rt: refresh_token },
+    { at: access_token },
   )
   await page.reload()
   await expect(page).toHaveURL('/users')

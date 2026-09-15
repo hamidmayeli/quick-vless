@@ -5,6 +5,7 @@ namespace API.Endpoints;
 
 public static class AuthEndpoints
 {
+    private const string RefreshCookieName = "refresh_token";
     private sealed class Log { }
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder builder)
@@ -54,19 +55,21 @@ public static class AuthEndpoints
                 await admins.UpdateAsync(admin);
 
                 logger.LogInformation("Login successful for {Username}", admin.Username);
-                return Results.Ok(new TokenResponse(access, refresh));
+                return TokenResponseWithRefreshCookie(access, refresh, expiry);
             });
 
         builder.MapPost("/auth/refresh", async (
             RefreshRequest req,
+            HttpRequest httpRequest,
             AdminRepository admins,
             TokenService tokens,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("POST /auth/refresh username={Username}", req.Username);
 
+            httpRequest.Cookies.TryGetValue(RefreshCookieName, out var refreshToken);
             var admin = await admins.GetByUsernameAsync(req.Username);
-            if (admin is null || !tokens.ValidateRefreshToken(admin, req.RefreshToken))
+            if (admin is null || refreshToken is null || !tokens.ValidateRefreshToken(admin, refreshToken))
             {
                 logger.LogWarning("Refresh token invalid or expired for {Username}", req.Username);
                 return Results.Unauthorized();
@@ -74,16 +77,38 @@ public static class AuthEndpoints
 
             var access = tokens.CreateAccessToken(admin.Username);
             var (refresh, expiry) = tokens.CreateRefreshToken();
-            admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow || rt.Token == req.RefreshToken);
+            admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow || rt.Token == refreshToken);
             admin.RefreshTokens.Add(new() { Token = refresh, Expiry = expiry });
             await admins.UpdateAsync(admin);
 
             logger.LogInformation("Token refreshed for {Username}", admin.Username);
-            return Results.Ok(new TokenResponse(access, refresh));
+            return TokenResponseWithRefreshCookie(access, refresh, expiry);
         });
     }
 
+    private static IResult TokenResponseWithRefreshCookie(string accessToken, string refreshToken, DateTime expiry)
+    {
+        var response = Results.Ok(new TokenResponse(accessToken));
+        return new CookieResult(response, refreshToken, expiry);
+    }
+
+    private sealed class CookieResult(IResult inner, string refreshToken, DateTime expiry) : IResult
+    {
+        public async Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.Cookies.Append(RefreshCookieName, refreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = expiry,
+                Path = "/api/v1/auth",
+            });
+            await inner.ExecuteAsync(httpContext);
+        }
+    }
+
     public record LoginRequest(string Username, string Password);
-    public record RefreshRequest(string Username, string RefreshToken);
-    public record TokenResponse(string AccessToken, string RefreshToken);
+    public record RefreshRequest(string Username);
+    public record TokenResponse(string AccessToken);
 }

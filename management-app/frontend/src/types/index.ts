@@ -14,7 +14,6 @@ export interface Admin {
 
 export interface AuthTokens {
   access_token: string
-  refresh_token: string
 }
 
 export interface UsageRecord {

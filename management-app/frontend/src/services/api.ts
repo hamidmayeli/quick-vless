@@ -7,12 +7,59 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
 }
 
+function accessTokenExpiresSoon(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number }
+    return typeof payload.exp !== 'number' || payload.exp * 1000 - Date.now() < 30_000
+  } catch {
+    return true
+  }
+}
+
+function usernameFromAccessToken(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>
+    const name = Object.entries(payload).find(([key]) => key === 'name' || key.endsWith('/name'))?.[1]
+    return typeof name === 'string' ? name : null
+  } catch {
+    return null
+  }
+}
+
+let refreshPromise: Promise<void> | null = null
+
+async function refreshAccessToken(): Promise<void> {
+  const accessToken = localStorage.getItem('access_token')
+  const username = accessToken ? usernameFromAccessToken(accessToken) : null
+  if (!username) throw new Error('Unable to refresh session')
+
+  const res = await fetch(`${BASE}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  const tokens = await res.json() as AuthTokens
+  localStorage.setItem('access_token', tokens.access_token)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('access_token')
+  if (token && accessTokenExpiresSoon(token) && !path.startsWith('/auth/')) {
+    refreshPromise ??= refreshAccessToken().finally(() => { refreshPromise = null })
+    try {
+      await refreshPromise
+    } catch {
+      localStorage.removeItem('access_token')
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+  }
   const res = await fetch(`${BASE}${path}`, { ...init, headers: { ...authHeaders(), ...init?.headers } })
   if (res.status === 401) {
     if (localStorage.getItem('access_token')) {
       localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
       window.location.href = '/login'
     }
     throw new Error('Unauthorized')
@@ -29,10 +76,11 @@ export const authApi = {
       body: JSON.stringify({ username, password }),
     }),
 
-  refresh: (username: string, refreshToken: string): Promise<AuthTokens> =>
+  refresh: (username: string): Promise<AuthTokens> =>
     request('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ username, refresh_token: refreshToken }),
+      credentials: 'same-origin',
+      body: JSON.stringify({ username }),
     }),
 }
 

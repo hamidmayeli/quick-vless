@@ -17,6 +17,40 @@ test.describe('Auth flow', () => {
     await expect(page.locator('h2')).toContainText('Users')
   })
 
+  test('login stores refresh token as an HttpOnly Strict cookie', async ({ page }) => {
+    const response = await page.request.post('/api/v1/auth/login', {
+      data: { username: 'admin', password: 'password123' },
+    })
+    const body = await response.json()
+    expect(body.refresh_token).toBeUndefined()
+
+    const cookie = (await page.context().cookies()).find((item) => item.name === 'refresh_token')
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict' })
+  })
+
+  test('refreshes an access token that expires within 30 seconds', async ({ page }) => {
+    const loginResponse = await page.request.post('/api/v1/auth/login', {
+      data: { username: 'admin', password: 'password123' },
+    })
+    const { access_token } = await loginResponse.json()
+    const [header, payload, signature] = access_token.split('.')
+    const expiringToken = [
+      header,
+      Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(payload, 'base64url').toString()), exp: Math.floor(Date.now() / 1000) + 10 }))
+        .toString('base64url'),
+      signature,
+    ].join('.')
+
+    await page.goto('/users')
+    await page.evaluate((token) => localStorage.setItem('access_token', token), expiringToken)
+    const refreshRequest = page.waitForRequest((request) => request.url().endsWith('/api/v1/auth/refresh'))
+    await page.reload()
+    await refreshRequest
+
+    await expect(page).toHaveURL('/users')
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('access_token'))).not.toBe(expiringToken)
+  })
+
   test('wrong password shows error and stays on login', async ({ page }) => {
     // Ensure admin exists via API
     await page.request.post('/api/v1/auth/login', {

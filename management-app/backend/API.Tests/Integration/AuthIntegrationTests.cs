@@ -25,7 +25,11 @@ public sealed class AuthIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(json.TryGetProperty("access_token", out var at) && at.GetString() is not null);
-        Assert.True(json.TryGetProperty("refresh_token", out var rt) && rt.GetString() is not null);
+        Assert.False(json.TryGetProperty("refresh_token", out _));
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.Contains("refresh_token=", cookie);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -74,15 +78,18 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login",
             new { username = "admin", password = "pass" });
-        var tokens = await loginResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var refreshToken = tokens.GetProperty("refresh_token").GetString()!;
+        var refreshToken = Assert.Single(loginResponse.Headers.GetValues("Set-Cookie"))
+            .Split(';')[0].Split('=', 2)[1];
+        _client.DefaultRequestHeaders.Add("Cookie", $"refresh_token={refreshToken}");
 
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
-            new { username = "admin", refresh_token = refreshToken });
+            new { username = "admin" });
+        response.Headers.TryGetValues("Set-Cookie", out var cookies);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var newTokens = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(newTokens.TryGetProperty("access_token", out _));
+        Assert.NotEqual(refreshToken, Assert.Single(cookies!).Split(';')[0].Split('=', 2)[1]);
     }
 
     [Fact]
@@ -91,8 +98,9 @@ public sealed class AuthIntegrationTests : IDisposable
         await _client.PostAsJsonAsync("/api/v1/auth/login",
             new { username = "admin", password = "pass" });
 
+        _client.DefaultRequestHeaders.Add("Cookie", "refresh_token=invalid-token");
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
-            new { username = "admin", refresh_token = "invalid-token" });
+            new { username = "admin" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -100,8 +108,9 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Refresh_UnknownUser_Returns401()
     {
+        _client.DefaultRequestHeaders.Add("Cookie", "refresh_token=any-token");
         var response = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
-            new { username = "nobody", refresh_token = "any-token" });
+            new { username = "nobody" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

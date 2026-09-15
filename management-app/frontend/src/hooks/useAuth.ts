@@ -9,13 +9,11 @@ export function useAuth() {
   const login = useCallback(async (username: string, password: string) => {
     const tokens = await authApi.login(username, password)
     localStorage.setItem('access_token', tokens.access_token)
-    localStorage.setItem('refresh_token', tokens.refresh_token)
     setIsAuthenticated(true)
   }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
     setIsAuthenticated(false)
   }, [])
 
