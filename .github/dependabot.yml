@@ -1,0 +1,62 @@
+version: 2
+updates:
+  # Enable version updates for npm (frontend)
+  - package-ecosystem: "npm"
+    directory: "/management-app/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      frontend:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 3
+
+  # Enable version updates for npm (e2e)
+  - package-ecosystem: "npm"
+    directory: "/management-app/e2e"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      e2e:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 3
+
+  # Enable version updates for NuGet (.NET backend)
+  - package-ecosystem: "nuget"
+    directory: "/management-app/backend/API"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      backend:
+        patterns:
+          - "*"
+
+  # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    directory: "/management-app"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/deployables"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
