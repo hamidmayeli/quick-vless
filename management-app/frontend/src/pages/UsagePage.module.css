@@ -7,36 +7,90 @@
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.65rem;
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1.1rem 1.25rem;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
-  border-radius: 10px;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  background: #131326;
+  border: 1px solid #28284c;
+  border-radius: 8px;
+  min-width: 0;
 }
 
-.userName { font-size: 1rem; font-weight: 600; color: #e8e8f0; }
-.usedLabel { font-size: 1.4rem; font-weight: 700; color: #7c7cff; }
-.quota { font-size: 0.78rem; color: #6060a0; }
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.userDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.userName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e8e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usedLabel {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #7c7cff;
+  line-height: 1.2;
+}
+
+.cardFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: auto;
+}
+
+.quota { font-size: 0.72rem; color: #8080a0; }
 
 .progressTrack {
-  height: 6px;
-  background: #2a2a4a;
-  border-radius: 3px;
+  height: 4px;
+  background: #252545;
+  border-radius: 2px;
   overflow: hidden;
-  margin-top: 0.2rem;
+  margin-top: 0.1rem;
 }
 
 .progressBar {
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
   transition: width 0.4s ease;
+}
+
+.shareLayout {
+  display: grid;
+  grid-template-columns: minmax(260px, 300px) 1fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.pieWrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+}
+
+.cardsWrap {
+  min-width: 0;
 }
 
 .chartWrap {
@@ -77,9 +131,16 @@
 
 .empty { margin: 0; color: #6060a0; font-size: 0.9rem; }
 
+@media (max-width: 768px) {
+  .shareLayout {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
 @media (max-width: 480px) {
   .cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 
   .chartWrap {

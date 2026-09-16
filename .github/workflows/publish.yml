@@ -30,7 +30,93 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - uses: docker/build-push-action@v6
+      - name: Build main app image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: management-app
+          push: false
+          load: true
+          tags: hamidmayeli/quick-vless:ci-test
+          cache-from: type=gha,scope=management-app
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Create fake xray binary
+        run: |
+          mkdir -p /tmp/fake-xray
+          printf '#!/bin/sh\nexit 0\n' > /tmp/fake-xray/xray
+          chmod +x /tmp/fake-xray/xray
+
+      - name: Prepare storage dirs
+        run: mkdir -p /tmp/easy-xray-ci/usage_history
+
+      - name: Start app container
+        run: |
+          docker run -d \
+            --name easy-xray-test \
+            -p 8080:8080 \
+            -v /tmp/fake-xray/xray:/usr/local/bin/xray \
+            -v /tmp/easy-xray-ci:/tmp/easy-xray-ci \
+            -e ASPNETCORE_HTTP_PORTS=8080 \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e Jwt__Secret=ci-test-secret-minimum-32-chars-long-x \
+            -e Jwt__Issuer=easy-xray \
+            -e Storage__UsersPath=/tmp/easy-xray-ci/users.json \
+            -e Storage__AdminsPath=/tmp/easy-xray-ci/admins.json \
+            -e Storage__UsageHistoryDir=/tmp/easy-xray-ci/usage_history \
+            -e Xray__BinaryPath=/usr/local/bin/xray \
+            -e Xray__ConfigPath=/tmp/easy-xray-ci/xray.json \
+            -e Xray__StatsServer=127.0.0.1:10085 \
+            -e Xray__InboundTag=vless-in \
+            -e Xray__Host=localhost \
+            -e Xray__Port=443 \
+            -e Xray__RealityPublicKey=ci-placeholder-public-key \
+            -e Xray__RealityShortId=a1b2c3d4 \
+            -e Xray__Sni=www.microsoft.com \
+            -e Xray__Fingerprint=chrome \
+            hamidmayeli/quick-vless:ci-test
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080 && echo "Backend is ready" && exit 0
+            echo "Attempt $i/30 failed, waiting 2s..."
+            sleep 2
+          done
+          echo "Backend did not become ready in time" && exit 1
+
+      - name: Install Playwright
+        working-directory: management-app/e2e
+        run: |
+          pnpm install
+          pnpm exec playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        working-directory: management-app/e2e
+        env:
+          BASE_URL: http://localhost:8080
+          CI: 'true'
+        run: pnpm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: management-app/e2e/playwright-report/
+          retention-days: 7
+
+      - name: Stop app container
+        if: always()
+        run: docker stop easy-xray-test && docker rm easy-xray-test || true
+
+      - name: Build and push main app image
+        uses: docker/build-push-action@v6
         with:
           context: management-app
           push: true
@@ -39,23 +125,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=management-app
           cache-to: type=gha,mode=max,scope=management-app
-
-      - uses: docker/metadata-action@v5
-        id: meta-caddy
-        with:
-          images: hamidmayeli/quick-vless-caddy
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: deployables
-          file: deployables/Dockerfile.caddy
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta-caddy.outputs.tags }}
-          labels: ${{ steps.meta-caddy.outputs.labels }}
-          cache-from: type=gha,scope=caddy
-          cache-to: type=gha,mode=max,scope=caddy
