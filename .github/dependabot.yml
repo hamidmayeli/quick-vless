@@ -10,6 +10,9 @@ updates:
       frontend:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "typescript"
+        versions: ["7.0.x"]
     cooldown:
       default-days: 3
 
@@ -23,6 +26,9 @@ updates:
       e2e:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "typescript"
+        versions: ["7.0.x"]
     cooldown:
       default-days: 3
 
