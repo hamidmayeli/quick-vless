@@ -123,6 +123,63 @@
   cursor: pointer;
 }
 
+.periodFilter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: 0.8rem 1rem;
+  background: #131326;
+  border: 1px solid #28284c;
+  border-radius: 8px;
+}
+
+.periodLabel {
+  color: #e8e8f0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.periodPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.periodButton {
+  color: #a8a8c0;
+  background: #1a1a2e;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+}
+
+.periodButtonActive {
+  color: #fff;
+  background: #4d4d9c;
+  border-color: #7c7cff;
+}
+
+.periodFilter input[type='datetime-local'] {
+  color: #e8e8f0;
+  background: #1a1a2e;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  padding: 0.3rem 0.45rem;
+  color-scheme: dark;
+}
+
+.clearPeriod {
+  color: #a8a8c0;
+  background: transparent;
+  border: 1px solid #3a3a5a;
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+}
+
 .reportGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

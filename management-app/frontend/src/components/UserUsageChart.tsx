@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts'
 import type { UsageRecord, UserUsageSummary } from '@/types'
 import { buildUsageData, CHART_COLORS, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
@@ -70,6 +70,7 @@ export function UserUsageChart({ records, summaries, grouping, selectedUserIds, 
                   dot={false}
                 />
               ))}
+            <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
           </LineChart>
         </ResponsiveContainer>
       )}

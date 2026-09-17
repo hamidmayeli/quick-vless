@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts'
 import type { UsageRecord } from '@/types'
 import { buildUsageData, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
@@ -32,6 +32,7 @@ export function AggregateUsageChart({ records, grouping, onGroupingChange }: Agg
         <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
         <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} formatter={(value) => [formatBytes(Number(value)), 'Used']} />
         <Line type="monotone" dataKey="all" name="All users" stroke="#7c7cff" strokeWidth={2} dot={false} />
+        <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
       </LineChart>
     </ResponsiveContainer>}
   </section>

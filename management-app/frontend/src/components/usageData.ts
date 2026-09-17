@@ -7,10 +7,20 @@ export const CHART_COLORS = [
 ]
 export const BYTES_PER_GB = 1_073_741_824
 export type UsageGrouping = 'none' | 'hourly' | 'daily'
+export interface UsagePeriod { from: string; to: string }
 
 export function formatBytes(value: number) {
   if (value < BYTES_PER_GB) return `${(value / (1024 * 1024)).toFixed(0)} MB`
   return `${(value / BYTES_PER_GB).toFixed(2)} GB`
+}
+
+export function filterRecordsByPeriod(records: UsageRecord[], period: UsagePeriod) {
+  const from = period.from ? Date.parse(period.from) : Number.NEGATIVE_INFINITY
+  const to = period.to ? Date.parse(period.to) : Number.POSITIVE_INFINITY
+  return records.filter((record) => {
+    const timestamp = new Date(record.date).getTime()
+    return timestamp >= from && timestamp <= to
+  })
 }
 
 function startOfUtcDay(timestamp: number) {

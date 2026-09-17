@@ -1,12 +1,15 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Rectangle } from 'recharts'
-import type { UserUsageSummary } from '@/types'
+import type { UsageRecord, UserUsageSummary } from '@/types'
+import { BYTES_PER_GB } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
-export function UsagePerUserChart({ summaries }: { summaries: UserUsageSummary[] }) {
+export function UsagePerUserChart({ summaries, records }: { summaries: UserUsageSummary[]; records: UsageRecord[] }) {
+  const userTotals = new Map<string, number>()
+  records.forEach((record) => userTotals.set(record.user_id, (userTotals.get(record.user_id) ?? 0) + record.total))
   const chartData = summaries.map((summary) => ({
     name: summary.name,
-    used: summary.totalGb,
-    pct: summary.quotaGb ? Math.min(100, Math.round((summary.totalGb / summary.quotaGb) * 100)) : null
+    used: Math.round(((userTotals.get(summary.userId) ?? 0) / BYTES_PER_GB) * 100) / 100,
+    pct: summary.quotaGb ? Math.min(100, Math.round((((userTotals.get(summary.userId) ?? 0) / BYTES_PER_GB) / summary.quotaGb) * 100)) : null
   }))
   
   return <div className={styles.chartWrap}>
