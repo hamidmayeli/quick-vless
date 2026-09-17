@@ -27,6 +27,7 @@ export interface UsageRecord {
 export interface UserUsageSummary {
   userId: string
   name: string
+  totalBytes: number
   totalGb: number
   quotaGb: number | null
   records: UsageRecord[]

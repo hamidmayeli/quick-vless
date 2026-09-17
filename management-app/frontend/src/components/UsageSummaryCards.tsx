@@ -5,7 +5,7 @@ import styles from '../pages/UsagePage.module.css'
 export function UsageSummaryCards({ summaries }: { summaries: UserUsageSummary[] }) {
   return (
     <div className={styles.cards}>
-      {summaries.map((summary, index) => {
+      {summaries.sort((a, b) => b.totalBytes - a.totalBytes).map((summary, index) => {
         const pct = summary.quotaGb ? Math.min(100, Math.round((summary.totalGb / summary.quotaGb) * 100)) : null
         const dotColor = CHART_COLORS[index % CHART_COLORS.length]
         return (

@@ -1,10 +1,14 @@
 import type { UsageRecord } from '@/types'
 
 export const CHART_COLORS = [
-  '#7c7cff', '#43d9ad', '#ffb86b', '#ff6b8a', '#65a8ff', '#c792ea',
-  '#50fa7b', '#f1fa8c', '#ff79c6', '#8be9fd', '#fd9644', '#00d2d3',
-  '#a3e635', '#fab1a0', '#ff5252', '#f368e0',
-]
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4',
+  '#ec4899', '#84cc16', '#6366f1', '#f97316', '#be123c', '#d946ef',
+  '#eab308', '#3b0764', '#064e3b', '#7f1d1d', '#0284c7', '#14b8a6',
+  '#15803d', '#b45309', '#6d28d9', '#0f766e', '#a21caf', '#4d7c0f',
+  '#1e40af', '#c2410c', '#047857', '#854d0e', '#5b21b6', '#9f1239',
+  '#334155',
+];
+
 export const BYTES_PER_GB = 1_073_741_824
 export type UsageGrouping = 'none' | 'hourly' | 'daily'
 export interface UsagePeriod { from: string; to: string }
