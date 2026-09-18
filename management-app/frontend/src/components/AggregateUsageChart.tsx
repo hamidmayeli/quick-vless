@@ -30,7 +30,9 @@ export function AggregateUsageChart({ records, grouping, onGroupingChange }: Agg
         <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
         <XAxis dataKey="label" tick={{ fill: '#8080a0', fontSize: 11 }} />
         <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
-        <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} formatter={(value) => [formatBytes(Number(value)), 'Used']} />
+        <Tooltip
+          contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+          formatter={(value) => [formatBytes(Number(value)), 'Used']} />
         <Line type="monotone" dataKey="all" name="All users" stroke="#7c7cff" strokeWidth={2} dot={false} />
         <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
       </LineChart>

@@ -19,7 +19,12 @@ export function UsagePerUserChart({ summaries, records }: { summaries: UserUsage
         <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
         <XAxis dataKey="name" tick={{ fill: '#8080a0', fontSize: 12 }} />
         <YAxis unit=" GB" tick={{ fill: '#8080a0', fontSize: 12 }} />
-        <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }} labelStyle={{ color: '#e8e8f0' }} formatter={(value) => [`${Number(value ?? 0).toFixed(2)} GB`, 'Used']} />
+        <Tooltip
+          contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+          labelStyle={{ display: 'none' }}
+          itemStyle={{ color: '#e8e8f0' }}
+          formatter={(value, _, item) => [`${item.payload.name}: ${Number(value ?? 0).toFixed(2)} GB`]}
+          />
         <Bar
           dataKey="used"
           radius={[4, 4, 0, 0]}
