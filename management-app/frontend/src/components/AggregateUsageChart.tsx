@@ -1,6 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts'
 import type { UsageRecord } from '@/types'
-import { buildUsageData, formatBytes, type UsageGrouping } from './usageData'
+import { buildUsageData, BYTES_PER_GB, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
 interface AggregateUsageChartProps { records: UsageRecord[]; grouping: UsageGrouping; onGroupingChange: (grouping: UsageGrouping) => void }
@@ -9,7 +9,7 @@ export function AggregateUsageChart({ records, grouping, onGroupingChange }: Agg
   const usageData = buildUsageData(records, grouping)
   return (
   <section className={styles.chartWrap}>
-    <h3 className={styles.chartTitle}>All users usage</h3>
+    <h3 className={styles.chartTitle}>All users usage {(records.reduce((acc, rec) => acc + rec.total, 0) / BYTES_PER_GB).toFixed(2)} GB</h3>
 
     <div className={styles.userFilters}>
       {(['none', 'hourly', 'daily'] as const).map((option) => (
