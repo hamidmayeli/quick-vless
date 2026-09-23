@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import { useUsage } from '@/hooks/useUsage'
 import { UsagePerUserChart } from '@/components/UsagePerUserChart'
@@ -6,6 +6,7 @@ import { UsageShareChart } from '@/components/UsageShareChart'
 import { AggregateUsageChart } from '@/components/AggregateUsageChart'
 import { UserUsageChart } from '@/components/UserUsageChart'
 import { WeeklyComparisonChart } from '@/components/WeeklyComparisonChart'
+import { formatDateTimeLocal, getTimeZone, useTimeZone } from '@/settings/timezone'
 import { filterRecordsByPeriod, type UsageGrouping, type UsagePeriod } from '@/components/usageData'
 import styles from './UsagePage.module.css'
 
@@ -17,12 +18,6 @@ const PERIOD_PRESETS: { value: Exclude<PeriodPreset, 'custom'>; label: string; m
   { value: '30d', label: '30 days', milliseconds: 30 * 24 * 60 * 60 * 1000 },
 ]
 
-function toDateTimeLocal(timestamp: number) {
-  const date = new Date(timestamp)
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
 export function UsagePage() {
   const { users, loading: usersLoading } = useUsers()
   const { summaries, loading: usageLoading, error } = useUsage(users)
@@ -30,20 +25,27 @@ export function UsagePage() {
   const [grouping, setGrouping] = useState<UsageGrouping>('hourly')
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('24h')
   const [customPeriod, setCustomPeriod] = useState<UsagePeriod | null>(null)
+  const [timeZoneSetting] = useTimeZone()
+  const timeZone = useMemo(() => getTimeZone(timeZoneSetting), [timeZoneSetting])
+
+  const records = useMemo(() => summaries.flatMap((summary) => summary.records), [summaries])
+  const anchor = useMemo(() => records.reduce((latest, record) => Math.max(latest, Date.parse(record.date)), 0), [records])
+
+  const selectedPreset = PERIOD_PRESETS.find((preset) => preset.value === periodPreset)
+  const period = useMemo<UsagePeriod>(() => {
+    if (periodPreset === 'custom' && customPeriod) {
+      return customPeriod
+    }
+    return {
+      from: selectedPreset && anchor ? formatDateTimeLocal(anchor - selectedPreset.milliseconds, timeZone) : '',
+      to: selectedPreset && anchor ? formatDateTimeLocal(anchor, timeZone) : '',
+    }
+  }, [periodPreset, customPeriod, selectedPreset, anchor, timeZone])
+
+  const chartRecords = useMemo(() => filterRecordsByPeriod(records, period, timeZone), [records, period, timeZone])
 
   if (usersLoading || usageLoading) return <p className={styles.state}>Loading usage data…</p>
   if (error) return <p className={styles.error}>{error}</p>
-
-  const records = summaries.flatMap((summary) => summary.records)
-  const anchor = records.reduce((latest, record) => Math.max(latest, new Date(record.date).getTime()), 0)
-  const selectedPreset = PERIOD_PRESETS.find((preset) => preset.value === periodPreset)
-  const period = periodPreset === 'custom' && customPeriod
-    ? customPeriod
-    : {
-        from: selectedPreset ? toDateTimeLocal(anchor - selectedPreset.milliseconds) : '',
-        to: selectedPreset ? toDateTimeLocal(anchor) : '',
-      }
-  const chartRecords = filterRecordsByPeriod(records, period)
 
   const selectPreset = (preset: PeriodPreset) => {
     if (preset === 'custom') setCustomPeriod(period)
@@ -105,16 +107,17 @@ export function UsagePage() {
           </>
         )}
       </div>
-      <AggregateUsageChart records={chartRecords} grouping={grouping} onGroupingChange={setGrouping} />
+      <AggregateUsageChart records={chartRecords} grouping={grouping} timeZone={timeZone} onGroupingChange={setGrouping} />
       <UserUsageChart
         records={chartRecords}
         summaries={summaries}
         grouping={grouping}
+        timeZone={timeZone}
         selectedUserIds={selectedUserIds}
         onSelectedUserIdsChange={setSelectedUserIds}
       />
       <UsagePerUserChart summaries={summaries} records={chartRecords} />
-      <WeeklyComparisonChart records={records} anchor={anchor} />
+      <WeeklyComparisonChart records={records} anchor={anchor} timeZone={timeZone} />
     </div>
   )
 }

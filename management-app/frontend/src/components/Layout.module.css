@@ -30,18 +30,25 @@
   gap: 0.25rem;
 }
 
-.links a {
+.links a,
+.navButton {
   padding: 0.4rem 0.9rem;
   border-radius: 6px;
   color: #a0a0c0;
   text-decoration: none;
   font-size: 0.9rem;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
-.links a:hover { background: #2a2a4a; color: #e8e8f0; }
+.links a:hover,
+.navButton:hover { background: #2a2a4a; color: #e8e8f0; }
 
-.links a.active { background: #7c7cff22; color: #7c7cff; }
+.links a.active,
+.navButton.active { background: #7c7cff22; color: #7c7cff; }
 
 .logout {
   padding: 0.35rem 0.85rem;

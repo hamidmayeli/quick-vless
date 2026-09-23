@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { SettingsModal } from './SettingsModal'
 import styles from './Layout.module.css'
 
 interface LayoutProps {
@@ -7,6 +9,7 @@ interface LayoutProps {
 
 export function Layout({ onLogout }: LayoutProps) {
   const navigate = useNavigate()
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   function handleLogout() {
     onLogout()
@@ -20,12 +23,20 @@ export function Layout({ onLogout }: LayoutProps) {
         <div className={styles.links}>
           <NavLink to="/users" className={({ isActive }) => isActive ? styles.active : ''}>Users</NavLink>
           <NavLink to="/usage" className={({ isActive }) => isActive ? styles.active : ''}>Usage</NavLink>
+          <button
+            type="button"
+            className={`${styles.navButton} ${settingsOpen ? styles.active : ''}`}
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
+          </button>
         </div>
         <button className={styles.logout} onClick={handleLogout}>Logout</button>
       </nav>
       <main className={styles.main}>
         <Outlet />
       </main>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

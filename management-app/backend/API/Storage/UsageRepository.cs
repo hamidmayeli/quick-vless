@@ -50,4 +50,19 @@ public sealed class UsageRepository(IConfiguration config)
             .GroupBy(r => r.UserId)
             .ToDictionary(g => g.Key, g => g.Sum(r => r.Total));
     }
+
+    public void CleanUp()
+    {
+        var files = Directory.GetFiles(_dir, "*.csv");
+        var threshold = DateTime.UtcNow.AddDays(-30);
+        foreach (var file in files)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(file);
+            if (DateTime.TryParseExact(fileName, "yyyyMMdd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var fileDate) && fileDate < threshold)
+            {
+                File.Delete(file);
+            }
+        }
+    }
 }

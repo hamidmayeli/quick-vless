@@ -22,8 +22,22 @@ public sealed class MetricsCollectorService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            CleanUp();
             await CollectAsync();
             await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+        }
+    }
+
+    private void CleanUp()
+    {
+        try
+        {
+            if (DateTime.Now.Hour == 0 && DateTime.Now.Minute <= 5)
+                usageRepo.CleanUp();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Metrics clean up failed");
         }
     }
 

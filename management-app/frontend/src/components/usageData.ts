@@ -1,4 +1,5 @@
 import type { UsageRecord } from '@/types'
+import { parseDateTimeLocal as parseTimeZoneDateTime } from '@/settings/timezone'
 
 export const CHART_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4',
@@ -18,52 +19,106 @@ export function formatBytes(value: number) {
   return `${(value / BYTES_PER_GB).toFixed(2)} GB`
 }
 
-export function filterRecordsByPeriod(records: UsageRecord[], period: UsagePeriod) {
-  const from = period.from ? Date.parse(period.from) : Number.NEGATIVE_INFINITY
-  const to = period.to ? Date.parse(period.to) : Number.POSITIVE_INFINITY
+export function filterRecordsByPeriod(records: UsageRecord[], period: UsagePeriod, timeZone?: string) {
+  const from = period.from ? parseTimeZoneDateTime(period.from, timeZone) : Number.NEGATIVE_INFINITY
+  const to = period.to ? parseTimeZoneDateTime(period.to, timeZone) : Number.POSITIVE_INFINITY
   return records.filter((record) => {
-    const timestamp = new Date(record.date).getTime()
+    const timestamp = Date.parse(record.date)
     return timestamp >= from && timestamp <= to
   })
 }
 
-function startOfUtcDay(timestamp: number) {
-  const date = new Date(timestamp)
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-}
+export function buildUsageData(records: UsageRecord[], grouping: UsageGrouping, timeZone?: string) {
+  if (records.length === 0) return []
 
-function startOfUtcWeek(timestamp: number) {
-  const day = new Date(timestamp).getUTCDay()
-  return startOfUtcDay(timestamp) - ((day + 6) % 7) * 24 * 60 * 60 * 1000
-}
+  const sortedRecords = [...records].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
+  const points = new Map<string, Record<string, string | number>>()
 
-export function buildUsageData(records: UsageRecord[], grouping: UsageGrouping) {
-  const sortedRecords = [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const points = new Map<number, Record<string, string | number>>()
-  sortedRecords.forEach((record) => {
-    const timestamp = new Date(record.date).getTime()
-    const bucket = grouping === 'hourly' ? Math.floor(timestamp / 3_600_000) * 3_600_000 : grouping === 'daily' ? startOfUtcDay(timestamp) : timestamp
+  const dayFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const hourFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  })
+
+  const noneFmt = new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    dateStyle: 'short',
+    timeStyle: 'short',
+  })
+
+  for (const record of sortedRecords) {
+    const recordDate = new Date(record.date)
+    const timestamp = recordDate.getTime()
+    let bucket: string
+    let label: string
+
+    if (grouping === 'daily') {
+      bucket = dayFmt.format(recordDate)
+      label = bucket
+    } else if (grouping === 'hourly') {
+      bucket = hourFmt.format(recordDate)
+      label = bucket.replace(',', '') + ':00'
+    } else {
+      bucket = String(timestamp)
+      label = noneFmt.format(recordDate)
+    }
+
     const point = points.get(bucket) ?? {
-      timestamp: bucket,
-      label: grouping === 'daily' ? new Date(bucket).toISOString().slice(0, 10) : new Date(bucket).toISOString().slice(0, 16).replace('T', ' '),
+      timestamp,
+      label,
       all: 0,
     }
     point.all = Number(point.all) + record.total
     point[record.user_id] = Number(point[record.user_id] ?? 0) + record.total
     points.set(bucket, point)
-  })
+  }
+
   return [...points.values()]
 }
 
-export function buildWeeklyData(records: UsageRecord[], anchor: number) {
-  const currentWeek = startOfUtcWeek(anchor)
+export function buildWeeklyData(records: UsageRecord[], anchor: number, timeZone?: string) {
+  if (!anchor || records.length === 0) return []
+
+  const dayFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const weekdayFmt = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', weekday: 'short' })
+
+  const dayTotals = new Map<string, number>()
+  for (const record of records) {
+    const key = dayFmt.format(new Date(record.date))
+    dayTotals.set(key, (dayTotals.get(key) ?? 0) + record.total)
+  }
+
+  const anchorDayKey = dayFmt.format(new Date(anchor))
+  const [y, m, d] = anchorDayKey.split('-').map(Number)
+  const anchorCalTime = Date.UTC(y, m - 1, d)
+  const dayOfWeek = new Date(anchorCalTime).getUTCDay()
+  const monOffset = (dayOfWeek + 6) % 7
+  const currentWeekMondayCal = anchorCalTime - monOffset * 86_400_000
+
   return Array.from({ length: 7 }, (_, dayIndex) => {
+    const dayCal = currentWeekMondayCal + dayIndex * 86_400_000
     const point: Record<string, string | number> = {
-      label: new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' }).format(new Date(currentWeek + dayIndex * 86_400_000)),
+      label: weekdayFmt.format(new Date(dayCal)),
     }
     for (let weekIndex = 0; weekIndex < 4; weekIndex += 1) {
-      const dayStart = currentWeek - weekIndex * 7 * 86_400_000 + dayIndex * 86_400_000
-      point[`week${weekIndex}`] = records.filter((record) => startOfUtcDay(new Date(record.date).getTime()) === dayStart).reduce((sum, record) => sum + record.total, 0)
+      const targetDayCal = currentWeekMondayCal - weekIndex * 7 * 86_400_000 + dayIndex * 86_400_000
+      const targetDayKey = new Date(targetDayCal).toISOString().slice(0, 10)
+      point[`week${weekIndex}`] = dayTotals.get(targetDayKey) ?? 0
     }
     return point
   })

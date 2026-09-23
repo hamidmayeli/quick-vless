@@ -3,8 +3,8 @@ import type { UsageRecord } from '@/types'
 import { buildWeeklyData, CHART_COLORS, formatBytes } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
-export function WeeklyComparisonChart({ records, anchor }: { records: UsageRecord[]; anchor: number }) {
-  const weeklyData = anchor ? buildWeeklyData(records, anchor) : []
+export function WeeklyComparisonChart({ records, anchor, timeZone }: { records: UsageRecord[]; anchor: number; timeZone?: string }) {
+  const weeklyData = anchor ? buildWeeklyData(records, anchor, timeZone) : []
   return (
     <div className={styles.chartWrap}>
       <h3 className={styles.chartTitle}>Weekly comparison</h3>

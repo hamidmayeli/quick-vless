@@ -3,10 +3,10 @@ import type { UsageRecord, UserUsageSummary } from '@/types'
 import { buildUsageData, CHART_COLORS, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
-interface UserUsageChartProps { records: UsageRecord[]; summaries: UserUsageSummary[]; grouping: UsageGrouping; selectedUserIds: string[] | null; onSelectedUserIdsChange: (userIds: string[] | null) => void }
+interface UserUsageChartProps { records: UsageRecord[]; summaries: UserUsageSummary[]; grouping: UsageGrouping; timeZone?: string; selectedUserIds: string[] | null; onSelectedUserIdsChange: (userIds: string[] | null) => void }
 
-export function UserUsageChart({ records, summaries, grouping, selectedUserIds, onSelectedUserIdsChange }: UserUsageChartProps) {
-  const usageData = buildUsageData(records, grouping)
+export function UserUsageChart({ records, summaries, grouping, timeZone, selectedUserIds, onSelectedUserIdsChange }: UserUsageChartProps) {
+  const usageData = buildUsageData(records, grouping, timeZone)
   const selectedIds = selectedUserIds ?? summaries.map((summary) => summary.userId)
 
   return (

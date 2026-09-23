@@ -3,10 +3,10 @@ import type { UsageRecord } from '@/types'
 import { buildUsageData, BYTES_PER_GB, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
-interface AggregateUsageChartProps { records: UsageRecord[]; grouping: UsageGrouping; onGroupingChange: (grouping: UsageGrouping) => void }
+interface AggregateUsageChartProps { records: UsageRecord[]; grouping: UsageGrouping; timeZone?: string; onGroupingChange: (grouping: UsageGrouping) => void }
 
-export function AggregateUsageChart({ records, grouping, onGroupingChange }: AggregateUsageChartProps) {
-  const usageData = buildUsageData(records, grouping)
+export function AggregateUsageChart({ records, grouping, timeZone, onGroupingChange }: AggregateUsageChartProps) {
+  const usageData = buildUsageData(records, grouping, timeZone)
   return (
   <section className={styles.chartWrap}>
     <h3 className={styles.chartTitle}>All users usage {(records.reduce((acc, rec) => acc + rec.total, 0) / BYTES_PER_GB).toFixed(2)} GB</h3>

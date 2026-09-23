@@ -1,0 +1,140 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.dialog {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: popIn 0.15s ease-out;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #f2f2ff;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #a0a0c0;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.closeBtn:hover {
+  color: #ffffff;
+  background: #2a2a4a;
+}
+
+.body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fieldLabel {
+  color: #e8e8f0;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.fieldDescription {
+  color: #8a8aa8;
+  font-size: 0.82rem;
+  margin-bottom: 0.25rem;
+}
+
+.select {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  background: #0f0f23;
+  color: #e8e8f0;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.select:focus {
+  border-color: #7c7cff;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid #2a2a4a;
+  background: #151528;
+}
+
+.doneBtn {
+  padding: 0.45rem 1.1rem;
+  background: #7c7cff;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.doneBtn:hover {
+  opacity: 0.85;
+}
