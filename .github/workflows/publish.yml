@@ -12,9 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
         with:
@@ -31,7 +31,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build main app image for testing
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: management-app
           push: false
@@ -116,7 +116,7 @@ jobs:
         run: docker stop easy-xray-test && docker rm easy-xray-test || true
 
       - name: Build and push main app image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: management-app
           push: true
