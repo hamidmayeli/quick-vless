@@ -63,6 +63,28 @@ curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/
   | sudo bash -s -- --domain manage.example.com
 ```
 
+#### Sample from branch
+
+```bash
+read -rsp 'Cloudflare API token: ' CF_API_TOKEN && export CF_API_TOKEN && echo
+
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/the-branch-name/install.sh \
+  | sudo --preserve-env=CF_API_TOKEN bash -s -- \
+      --domain manage.example.com \
+      --cf-domain cdn.example.com \
+      --branch the-branch-name \
+      --image-tag pr-21
+
+unset CF_API_TOKEN
+```
+
+Later to update to use main
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
+  | sudo bash -s -- --domain manage.example.com --upgrade --branch main --image-tag latest
+```
+
 Deployment files are written to `./easy-xray/` in the current directory.
 
 ### Clone-based install (alternative)
