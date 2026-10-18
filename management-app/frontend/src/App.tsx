@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { UsersPage } from '@/pages/UsersPage'
 import { UsagePage } from '@/pages/UsagePage'
 import { AdminsPage } from '@/pages/AdminsPage'
+import { ProfilesPage } from '@/pages/ProfilesPage'
 
 export function App() {
   const { isAuthenticated, session, isSuperAdmin, login, logout } = useAuth()
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/users" element={<UsersPage showOwner={isSuperAdmin} />} />
           <Route path="/usage" element={<UsagePage />} />
           <Route path="/admins" element={isSuperAdmin ? <AdminsPage /> : <Navigate to="/users" replace />} />
+          <Route path="/profiles" element={isSuperAdmin ? <ProfilesPage /> : <Navigate to="/users" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

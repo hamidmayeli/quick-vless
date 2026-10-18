@@ -1,22 +1,16 @@
-using API.Storage;
+using API.Services.Xray;
 
 namespace API.Services;
 
 public sealed class XrayConfigSyncService(
-    UserRepository userRepo,
-    XrayService xray,
-    XrayConfigFileService configFile,
+    XrayRuntime runtime,
     ILogger<XrayConfigSyncService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await configFile.SyncAsync(cancellationToken);
-
-            var users = await userRepo.GetAllAsync();
-            foreach (var user in users.Where(u => u.Enabled))
-                await xray.AddUserAsync(user);
+            await runtime.InitializeAsync(cancellationToken);
         }
         catch (Exception ex)
         {

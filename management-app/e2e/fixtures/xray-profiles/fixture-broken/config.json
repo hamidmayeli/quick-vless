@@ -1,0 +1,22 @@
+{
+  "inbounds": [
+    {
+      "tag": "vless-in",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": { "clients": [], "decryption": "none" },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "dest": "dl.google.com:443",
+          "serverNames": ["dl.google.com"],
+          "privateKey": "YOUR_PRIVATE_KEY",
+          "shortIds": ["a1b2c3d4"]
+        }
+      }
+    }
+  ],
+  "outbounds": [ { "protocol": "freedom", "tag": "direct" } ]
+}

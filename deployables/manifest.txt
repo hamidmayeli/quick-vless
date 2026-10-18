@@ -1,0 +1,12 @@
+# Files install.sh downloads into the deploy directory, one path per line.
+# Files under xray/ belong to profiles: they are only downloaded when missing,
+# so values install.sh filled in (and your own edits) survive an --upgrade.
+docker-compose.yaml
+Caddyfile
+Dockerfile.caddy
+update.sh
+xray-run.sh
+xray/vless-reality/config.json
+xray/vless-reality/client-config.template
+xray/vless-cf-ws/config.json
+xray/vless-cf-ws/client-config.template

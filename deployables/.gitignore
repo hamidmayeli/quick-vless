@@ -1,0 +1,9 @@
+# Written by install.sh and the running services when deploying from a clone.
+.env
+.install-state
+update.log
+*.bak
+data/
+
+# Cloudflare Origin CA certificates and keys.
+xray/*/tls/

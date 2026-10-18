@@ -26,7 +26,10 @@ export function Layout({ onLogout, username, isSuperAdmin }: LayoutProps) {
           <NavLink to="/users" className={({ isActive }) => isActive ? styles.active : ''}>Users</NavLink>
           <NavLink to="/usage" className={({ isActive }) => isActive ? styles.active : ''}>Usage</NavLink>
           {isSuperAdmin && (
-            <NavLink to="/admins" className={({ isActive }) => isActive ? styles.active : ''}>Admins</NavLink>
+            <>
+              <NavLink to="/admins" className={({ isActive }) => isActive ? styles.active : ''}>Admins</NavLink>
+              <NavLink to="/profiles" className={({ isActive }) => isActive ? styles.active : ''}>Profiles</NavLink>
+            </>
           )}
           <button
             type="button"

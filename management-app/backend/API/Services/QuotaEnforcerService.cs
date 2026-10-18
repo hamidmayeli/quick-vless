@@ -1,3 +1,4 @@
+using API.Services.Xray;
 using API.Storage;
 
 namespace API.Services;
@@ -5,8 +6,7 @@ namespace API.Services;
 public sealed class QuotaEnforcerService(
     UserRepository userRepo,
     UsageRepository usageRepo,
-    XrayService xray,
-    XrayConfigFileService configFile,
+    XrayRuntime runtime,
     ILogger<QuotaEnforcerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -20,7 +20,6 @@ public sealed class QuotaEnforcerService(
 
     private async Task EnforceAsync()
     {
-        var changed = false;
         try
         {
             var users = await userRepo.GetAllAsync();
@@ -51,13 +50,9 @@ public sealed class QuotaEnforcerService(
                 {
                     user.Enabled = false;
                     await userRepo.UpdateAsync(user);
-                    await xray.RemoveUserAsync(user);
-                    changed = true;
+                    await runtime.UserUpdatedAsync(user, wasEnabled: true);
                 }
             }
-
-            if (changed)
-                await configFile.SyncAsync();
         }
         catch (Exception ex)
         {
