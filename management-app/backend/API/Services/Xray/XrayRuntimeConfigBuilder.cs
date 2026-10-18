@@ -69,12 +69,17 @@ public static class XrayRuntimeConfigBuilder
             .ToList();
 
     /// <summary>
-    /// XTLS Vision only works on raw TCP with TLS or REALITY; Xray rejects it on WebSocket and other transports.
+    /// XTLS Vision works on raw TCP with TLS or REALITY, or on any transport once VLESS Encryption is on
+    /// (a "decryption" other than "none"). Xray rejects it elsewhere, e.g. plain VLESS over WebSocket.
     /// </summary>
     public static string DeriveFlow(JsonObject inbound) =>
-        NetworkOf(inbound) is "tcp" or "raw" && SecurityOf(inbound) is "tls" or "reality"
+        (NetworkOf(inbound) is "tcp" or "raw" && SecurityOf(inbound) is "tls" or "reality") || UsesVlessEncryption(inbound)
             ? VisionFlow
             : string.Empty;
+
+    public static bool UsesVlessEncryption(JsonObject inbound) =>
+        AsString((inbound["settings"] as JsonObject)?["decryption"]) is { Length: > 0 } decryption
+        && !string.Equals(decryption, "none", StringComparison.OrdinalIgnoreCase);
 
     public static IEnumerable<JsonObject> VlessInbounds(JsonObject config) =>
         (config["inbounds"] as JsonArray ?? [])

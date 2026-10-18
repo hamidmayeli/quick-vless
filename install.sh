@@ -48,8 +48,9 @@ Optional:
   --profile NAME            Xray profile active on first start: a folder in xray/
                             (default: vless-reality). Later, the super admin
                             switches profiles on the Profiles page.
-  --cf-domain DOMAIN        Hostname proxied by Cloudflare for the vless-cf-ws
-                            profile (e.g. cdn.example.com, one level deep)
+  --cf-domain DOMAIN        Hostname proxied by Cloudflare for the Cloudflare
+                            profiles, vless-cf-xhttp and vless-cf-ws
+                            (e.g. cdn.example.com, one level deep)
   --cf-api-token TOKEN      Cloudflare API token with the permission
                             Zone → SSL and Certificates → Edit. Creates the
                             Origin CA certificate for --cf-domain (15 years).
@@ -94,7 +95,8 @@ Steps (in execution order; * = runs every time):
   generate_secrets        * Fill in any missing secrets/keys
   write_env_file          * Write \$DEPLOY_DIR/.env (chmod 600)
   install_cf_certificate  * With --cf-domain: install (or, with an API token,
-                            create) the Origin certificate in xray/vless-cf-ws/tls/
+                            create) the Origin certificate in the tls/ folder of
+                            every Cloudflare profile
   write_xray_profiles     * Fill in the YOUR_* placeholders of every profile
   pull_images               docker compose pull
   start_services            docker compose up -d (and restart Xray if its
@@ -129,6 +131,9 @@ PARAM_CF_ORIGIN_CERT=""
 PARAM_CF_ORIGIN_KEY=""
 PARAM_CF_API_TOKEN="${CF_API_TOKEN:-}"
 PARAM_WS_ID=""
+PARAM_XHTTP_ID=""
+PARAM_VLESS_ENC_PRIVATE_KEY=""
+PARAM_VLESS_ENC_PUBLIC_KEY=""
 PARAM_BRANCH=""
 PARAM_IMAGE_TAG=""
 PARAM_DEPLOY_DIR=""
@@ -273,6 +278,9 @@ load_env_if_present() {
   [[ -z "$PARAM_PROFILE"           ]] && PARAM_PROFILE="$(_env_val XRAY_DEFAULT_PROFILE)"
   [[ -z "$PARAM_CF_DOMAIN"         ]] && PARAM_CF_DOMAIN="$(_env_val XRAY_CF_DOMAIN)"
   [[ -z "$PARAM_WS_ID"             ]] && PARAM_WS_ID="$(_env_val XRAY_WS_ID)"
+  [[ -z "$PARAM_XHTTP_ID"          ]] && PARAM_XHTTP_ID="$(_env_val XRAY_XHTTP_ID)"
+  [[ -z "$PARAM_VLESS_ENC_PRIVATE_KEY" ]] && PARAM_VLESS_ENC_PRIVATE_KEY="$(_env_val XRAY_VLESS_ENC_PRIVATE_KEY)"
+  [[ -z "$PARAM_VLESS_ENC_PUBLIC_KEY"  ]] && PARAM_VLESS_ENC_PUBLIC_KEY="$(_env_val XRAY_VLESS_ENC_PUBLIC_KEY)"
   [[ -z "$PARAM_BRANCH"            ]] && PARAM_BRANCH="$(_env_val INSTALL_BRANCH)"
   [[ -z "$PARAM_IMAGE_TAG"         ]] && PARAM_IMAGE_TAG="$(_env_val APP_IMAGE_TAG)"
   # SNI and fingerprint: only load if they haven't been overridden and the file has them
@@ -539,6 +547,23 @@ step_check_prerequisites() {
 # ------------------------------------------------------------
 # 4. generate_secrets
 # ------------------------------------------------------------
+
+# Prints "PRIVATE PUBLIC": a raw X25519 key pair, base64url without padding, as Xray uses for
+# REALITY and VLESS Encryption.
+#   PKCS8 DER for x25519 is always 48 bytes; the last 32 are the raw private key.
+#   SubjectPublicKeyInfo DER for x25519 is always 44 bytes; the last 32 are the raw public key.
+x25519_pair() {
+  local pem private public
+  pem="$(openssl genpkey -algorithm x25519 2>/dev/null)" \
+    || die "openssl failed to generate an x25519 key pair."
+  private="$(printf '%s' "$pem" | openssl pkey -outform DER 2>/dev/null | tail -c 32 \
+    | base64 | tr '+/' '-_' | tr -d '=')"
+  public="$(printf '%s' "$pem" | openssl pkey -pubout -outform DER 2>/dev/null | tail -c 32 \
+    | base64 | tr '+/' '-_' | tr -d '=')"
+  [[ -n "$private" && -n "$public" ]] || die "Failed to derive an x25519 key pair from openssl output."
+  echo "$private $public"
+}
+
 step_generate_secrets() {
   # JWT secret
   if [[ -z "$PARAM_JWT_SECRET" ]]; then
@@ -551,22 +576,21 @@ step_generate_secrets() {
   # Xray Reality key pair
   if [[ -z "$PARAM_XRAY_PRIVATE_KEY" || -z "$PARAM_XRAY_PUBLIC_KEY" ]]; then
     info "  Generating Xray x25519 key pair via openssl..."
-    # PKCS8 DER for x25519 is always 48 bytes; last 32 are the raw private key.
-    # SubjectPublicKeyInfo DER for x25519 is always 44 bytes; last 32 are the raw public key.
-    local xray_key_pem
-    xray_key_pem="$(openssl genpkey -algorithm x25519 2>/dev/null)" \
-      || die "openssl failed to generate an x25519 key pair."
-    PARAM_XRAY_PRIVATE_KEY="$(printf '%s' "$xray_key_pem" \
-      | openssl pkey -outform DER 2>/dev/null | tail -c 32 \
-      | base64 | tr '+/' '-_' | tr -d '=')"
-    PARAM_XRAY_PUBLIC_KEY="$(printf '%s' "$xray_key_pem" \
-      | openssl pkey -pubout -outform DER 2>/dev/null | tail -c 32 \
-      | base64 | tr '+/' '-_' | tr -d '=')"
-    [[ -n "$PARAM_XRAY_PRIVATE_KEY" && -n "$PARAM_XRAY_PUBLIC_KEY" ]] \
-      || die "Failed to derive x25519 key pair from openssl output."
+    read -r PARAM_XRAY_PRIVATE_KEY PARAM_XRAY_PUBLIC_KEY <<<"$(x25519_pair)"
+    [[ -n "$PARAM_XRAY_PUBLIC_KEY" ]] || die "Could not generate the REALITY key pair."
     info "  Xray key pair generated."
   else
     info "  Xray key pair: (provided)"
+  fi
+
+  # VLESS Encryption key pair of the Cloudflare XHTTP profile: the X25519 authentication of
+  # mlkem768x25519plus. Xray calls the public key the "password".
+  if [[ -z "$PARAM_VLESS_ENC_PRIVATE_KEY" || -z "$PARAM_VLESS_ENC_PUBLIC_KEY" ]]; then
+    read -r PARAM_VLESS_ENC_PRIVATE_KEY PARAM_VLESS_ENC_PUBLIC_KEY <<<"$(x25519_pair)"
+    [[ -n "$PARAM_VLESS_ENC_PUBLIC_KEY" ]] || die "Could not generate the VLESS Encryption key pair."
+    info "  VLESS Encryption key pair generated."
+  else
+    info "  VLESS Encryption key pair: (provided)"
   fi
 
   # Short ID
@@ -585,12 +609,18 @@ step_generate_secrets() {
     info "  Host: (provided) $PARAM_HOST"
   fi
 
-  # WebSocket path of the Cloudflare profile: random per server, so installs don't share one.
+  # Paths of the Cloudflare profiles: random per server, so installs don't share one.
   if [[ -z "$PARAM_WS_ID" ]]; then
     PARAM_WS_ID="ws-$(openssl rand -hex 12)"
     info "  WebSocket path: (generated) /$PARAM_WS_ID"
   else
     info "  WebSocket path: (provided) /$PARAM_WS_ID"
+  fi
+  if [[ -z "$PARAM_XHTTP_ID" ]]; then
+    PARAM_XHTTP_ID="xh-$(openssl rand -hex 12)"
+    info "  XHTTP path    : (generated) /$PARAM_XHTTP_ID"
+  else
+    info "  XHTTP path    : (provided) /$PARAM_XHTTP_ID"
   fi
 
   [[ -n "$PARAM_PROFILE" ]] || PARAM_PROFILE="vless-reality"
@@ -629,6 +659,9 @@ XRAY_FINGERPRINT=${PARAM_XRAY_FINGERPRINT}
 XRAY_DEFAULT_PROFILE=${PARAM_PROFILE}
 XRAY_CF_DOMAIN=${PARAM_CF_DOMAIN}
 XRAY_WS_ID=${PARAM_WS_ID}
+XRAY_XHTTP_ID=${PARAM_XHTTP_ID}
+XRAY_VLESS_ENC_PRIVATE_KEY=${PARAM_VLESS_ENC_PRIVATE_KEY}
+XRAY_VLESS_ENC_PUBLIC_KEY=${PARAM_VLESS_ENC_PUBLIC_KEY}
 INSTALL_BRANCH=${PARAM_BRANCH}
 APP_IMAGE_TAG=${PARAM_IMAGE_TAG}
 EOF
@@ -708,8 +741,8 @@ install_pem_pair() {
 CF_API="${EASY_XRAY_CF_API:-https://api.cloudflare.com/client/v4}"
 
 # create_origin_certificate CERT KEY — asks Cloudflare's Origin CA for a 15-year certificate
-# covering --cf-domain. The private key is generated here and never leaves the server:
-# Cloudflare only receives a certificate signing request.
+# covering --cf-domain and writes the pair to CERT and KEY. The private key is generated here
+# and never leaves the server: Cloudflare only receives a certificate signing request.
 create_origin_certificate() {
   local cert="$1" key="$2" work response pem reasons
   work="$(mktemp -d)"
@@ -743,17 +776,29 @@ create_origin_certificate() {
     rm -rf "$work"
     die "Cloudflare did not create the certificate: ${reasons:-unexpected response}. The token needs the permission Zone → SSL and Certificates → Edit on the zone of $PARAM_CF_DOMAIN."
   fi
-  printf '%b' "$pem" > "$work/fullchain.pem"
-
-  check_certificate "$work/fullchain.pem" "$work/privkey.pem" "$PARAM_CF_DOMAIN"
-  install_pem_pair "$work/fullchain.pem" "$work/privkey.pem" "$cert" "$key"
+  printf '%b' "$pem" > "$cert"
+  mv "$work/privkey.pem" "$key"
   rm -rf "$work"
-  info "Origin certificate created by Cloudflare and installed in xray/vless-cf-ws/tls/."
+
+  check_certificate "$cert" "$key" "$PARAM_CF_DOMAIN"
+  info "  Cloudflare created the Origin certificate."
+}
+
+# Prints the profile folders that terminate TLS with the Origin certificate: their config.json
+# reads it from their own tls/ folder (e.g. vless-cf-ws, vless-cf-xhttp).
+cf_profile_dirs() {
+  local dir
+  for dir in "$DEPLOY_DIR"/xray/*/; do
+    dir="${dir%/}"
+    if grep -qF "/etc/xray/profiles/$(basename "$dir")/tls/fullchain.pem" "$dir/config.json" 2>/dev/null; then
+      echo "$dir"
+    fi
+  done
 }
 
 step_install_cf_certificate() {
   if [[ -z "$PARAM_CF_DOMAIN" ]]; then
-    info "No --cf-domain — the Cloudflare WebSocket profile (vless-cf-ws) stays disabled."
+    info "No --cf-domain — the Cloudflare profiles stay disabled."
     return 0
   fi
 
@@ -764,35 +809,59 @@ step_install_cf_certificate() {
       || die "--cf-domain ($PARAM_CF_DOMAIN) must differ from --domain and --host."
   done
 
-  local tls_dir="$DEPLOY_DIR/xray/vless-cf-ws/tls"
-  local cert="$tls_dir/fullchain.pem"
-  local key="$tls_dir/privkey.pem"
-  local problem=""
+  local -a dirs
+  mapfile -t dirs < <(cf_profile_dirs)
+  if [[ ${#dirs[@]} -eq 0 ]]; then
+    warn "No profile in xray/ reads an Origin certificate from its tls/ folder — nothing to install."
+    return 0
+  fi
 
+  # The certificate already installed in one of those profiles, if it still covers --cf-domain.
+  local d cert="" key="" problem=""
+  for d in "${dirs[@]}"; do
+    [[ -f "$d/tls/fullchain.pem" && -f "$d/tls/privkey.pem" ]] || continue
+    if problem="$(certificate_problem "$d/tls/fullchain.pem" "$d/tls/privkey.pem" "$PARAM_CF_DOMAIN")"; then
+      cert="$d/tls/fullchain.pem"
+      key="$d/tls/privkey.pem"
+      break
+    fi
+  done
+
+  local staging=""
   if [[ -n "$PARAM_CF_ORIGIN_CERT" ]]; then
     check_certificate "$PARAM_CF_ORIGIN_CERT" "$PARAM_CF_ORIGIN_KEY" "$PARAM_CF_DOMAIN"
-    install_pem_pair "$PARAM_CF_ORIGIN_CERT" "$PARAM_CF_ORIGIN_KEY" "$cert" "$key"
-    info "Origin certificate installed in xray/vless-cf-ws/tls/."
-  elif [[ -f "$cert" && -f "$key" ]] && problem="$(certificate_problem "$cert" "$key" "$PARAM_CF_DOMAIN")"; then
+    cert="$PARAM_CF_ORIGIN_CERT"
+    key="$PARAM_CF_ORIGIN_KEY"
+  elif [[ -n "$cert" ]] && ! { cert_expires_soon "$cert" && [[ -n "$PARAM_CF_API_TOKEN" ]]; }; then
     # A usable certificate is already installed: don't ask Cloudflare for another one on every run.
-    if cert_expires_soon "$cert" && [[ -n "$PARAM_CF_API_TOKEN" ]]; then
-      info "The Origin certificate expires on $(cert_end_date "$cert") — replacing it."
-      create_origin_certificate "$cert" "$key"
-    else
-      if cert_expires_soon "$cert"; then
-        warn "The Origin certificate in xray/vless-cf-ws/tls/ expires on $(cert_end_date "$cert")."
-        warn "  Re-run with --cf-api-token (or CF_API_TOKEN) to replace it."
-      fi
-      info "Using the Origin certificate already in xray/vless-cf-ws/tls/ (expires $(cert_end_date "$cert"))."
+    if cert_expires_soon "$cert"; then
+      warn "The Origin certificate expires on $(cert_end_date "$cert")."
+      warn "  Re-run with --cf-api-token (or CF_API_TOKEN) to replace it."
     fi
+    info "Using the installed Origin certificate (expires $(cert_end_date "$cert"))."
   elif [[ -n "$PARAM_CF_API_TOKEN" ]]; then
-    [[ -z "$problem" ]] || info "The installed certificate can't be used: $problem"
-    create_origin_certificate "$cert" "$key"
+    if [[ -n "$cert" ]]; then
+      info "The Origin certificate expires on $(cert_end_date "$cert") — replacing it."
+    elif [[ -n "$problem" ]]; then
+      info "The installed certificate can't be used: $problem"
+    fi
+    staging="$(mktemp -d)"
+    chmod 700 "$staging"
+    create_origin_certificate "$staging/fullchain.pem" "$staging/privkey.pem"
+    cert="$staging/fullchain.pem"
+    key="$staging/privkey.pem"
   elif [[ -n "$problem" ]]; then
     die "$problem Pass --cf-api-token to create a new certificate, or --cf-origin-cert and --cf-origin-key."
   else
     die "--cf-domain needs a certificate the first time: pass --cf-api-token (or set CF_API_TOKEN) to have Cloudflare create one, or --cf-origin-cert and --cf-origin-key with one you created in Cloudflare (SSL/TLS → Origin Server)."
   fi
+
+  # Every Cloudflare profile gets its own copy, so each profile folder stays self-contained.
+  for d in "${dirs[@]}"; do
+    install_pem_pair "$cert" "$key" "$d/tls/fullchain.pem" "$d/tls/privkey.pem"
+  done
+  [[ -z "$staging" ]] || rm -rf "$staging"
+  info "Origin certificate in place for: $(for d in "${dirs[@]}"; do basename "$d"; done | tr '\n' ' ')"
 }
 
 # ------------------------------------------------------------
@@ -814,6 +883,9 @@ patch_profile_file() {
     YOUR_FINGERPRINT "$PARAM_XRAY_FINGERPRINT"
     YOUR_CF_DOMAIN   "$PARAM_CF_DOMAIN"
     YOUR_WS_ID       "$PARAM_WS_ID"
+    YOUR_XHTTP_ID    "$PARAM_XHTTP_ID"
+    YOUR_VLESS_ENC_PRIVATE_KEY "$PARAM_VLESS_ENC_PRIVATE_KEY"
+    YOUR_VLESS_ENC_PUBLIC_KEY  "$PARAM_VLESS_ENC_PUBLIC_KEY"
   )
   for (( i = 0; i < ${#pairs[@]}; i += 2 )); do
     placeholder="${pairs[i]}"
@@ -840,8 +912,8 @@ step_write_xray_profiles() {
   [[ $count -gt 0 ]] || die "No profiles found in $DEPLOY_DIR/xray/."
   [[ -d "$DEPLOY_DIR/xray/$PARAM_PROFILE" ]] \
     || die "--profile $PARAM_PROFILE: there is no xray/$PARAM_PROFILE folder."
-  if [[ "$PARAM_PROFILE" == "vless-cf-ws" && -z "$PARAM_CF_DOMAIN" ]]; then
-    die "--profile vless-cf-ws needs --cf-domain."
+  if grep -qF 'YOUR_CF_DOMAIN' "$DEPLOY_DIR/xray/$PARAM_PROFILE/client-config.template" 2>/dev/null; then
+    die "--profile $PARAM_PROFILE needs --cf-domain."
   fi
   info "Profiles ready ($count found; the app reports any that still need values)."
 }
@@ -966,11 +1038,13 @@ step_verify_cloudflare() {
   fi
 
   status="$(head -1 <<<"$headers" | awk '{print $2}')"
-  # Only meaningful while the WebSocket profile runs: with REALITY active, Cloudflare's
+  # Only meaningful while a Cloudflare profile runs: with REALITY active, Cloudflare's
   # connection lands on REALITY and always looks like a certificate error.
-  if [[ "$(active_profile)" == "vless-cf-ws" && ( "$status" == "525" || "$status" == "526" ) ]]; then
+  local active
+  active="$(active_profile)"
+  if cf_profile_dirs | grep -qxF "$DEPLOY_DIR/xray/$active" && [[ "$status" == "525" || "$status" == "526" ]]; then
     warn "Cloudflare answered $status: its TLS connection to this server failed (525) or the"
-    warn "  certificate was rejected (526). Check the Origin certificate in xray/vless-cf-ws/tls/"
+    warn "  certificate was rejected (526). Check the Origin certificate in xray/$active/tls/"
     warn "  and set SSL/TLS mode to Full (strict)."
     return 0
   fi
@@ -1021,7 +1095,7 @@ echo "  Management UI: https://${PARAM_DOMAIN}"
 echo "  First login: enter any username and password to create the super admin account"
 echo "  Active profile on first start: ${PARAM_PROFILE} (switch it on the Profiles page)"
 if [[ -n "$PARAM_CF_DOMAIN" ]]; then
-  echo "  Cloudflare WebSocket profile: vless-cf-ws on ${PARAM_CF_DOMAIN}"
+  echo "  Cloudflare profiles on ${PARAM_CF_DOMAIN}: $(cf_profile_dirs | xargs -r -n1 basename | tr '\n' ' ')"
 fi
 if [[ "$PARAM_BRANCH" != "main" || "$PARAM_IMAGE_TAG" != "latest" ]]; then
   echo "  Installed from branch ${PARAM_BRANCH} with app image tag ${PARAM_IMAGE_TAG}"

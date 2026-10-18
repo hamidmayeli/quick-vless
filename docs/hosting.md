@@ -110,14 +110,14 @@ The script warns when the branch isn't `main` but the image is still `latest`. T
 
 1. Downloads the files listed in `manifest.txt` into the deploy directory, from `--branch` (default `main`): `docker-compose.yaml`, `Caddyfile`, `Dockerfile.caddy`, `update.sh`, `xray-run.sh`, and the profile folders in `xray/`. Skipped if the files are already present (see [Upgrading](upgrading.md) for `--upgrade`).
 2. Verifies Docker, Docker Compose, openssl, and curl are installed.
-3. Generates a JWT signing secret, an Xray Reality key pair, a short ID, and a random WebSocket path — all automatically.
+3. Generates a JWT signing secret, an Xray Reality key pair, a short ID, a VLESS Encryption key pair, and random WebSocket and XHTTP paths — all automatically.
 4. Writes a `.env` file in the deploy directory with all configuration (permissions 600).
-5. With `--cf-domain`, installs the Cloudflare Origin certificate into `xray/vless-cf-ws/tls/`, creating it through the Cloudflare API when you pass an API token.
+5. With `--cf-domain`, installs the Cloudflare Origin certificate into the `tls/` folder of each Cloudflare profile, creating it through the Cloudflare API when you pass an API token.
 6. Fills in the `YOUR_*` placeholders in every profile's `config.json` and `client-config.template`.
 7. Pulls the Docker images.
 8. Starts all services with `docker compose up -d`.
 9. Polls `http://localhost` until the management UI responds.
-10. With `--cf-domain`, checks that the hostname is proxied by Cloudflare (warnings only — see [Cloudflare WebSocket Setup](#cloudflare-websocket-setup)).
+10. With `--cf-domain`, checks that the hostname is proxied by Cloudflare (warnings only — see [Cloudflare Setup](#cloudflare-setup)).
 
 The address in the REALITY `vless://` links is `--host`, which defaults to `--domain`. The script does not detect the server's IP; pass `--host <ip>` to use an IP address instead.
 
@@ -206,20 +206,32 @@ A profile is one way of serving VPN users. Each profile is a folder in `<deploy-
 | `config.json` | An Xray config with at least one `vless` inbound. Users are added to every `vless` inbound. |
 | `client-config.template` | The `vless://` link users get, with `{{secret}}` (the user's UUID) and `{{name}}` filled in by the app. |
 
-Two profiles ship with easy-xray:
+Three profiles ship with easy-xray:
 
 | Profile | Transport | Needs |
 |---------|-----------|-------|
 | `vless-reality` | VLESS + TCP + REALITY + Vision. Clients connect straight to the server and look like visits to `XRAY_SNI`. | Nothing extra — the default. |
-| `vless-cf-ws` | VLESS + WebSocket + TLS through Cloudflare's network. Useful when the server's IP is blocked. | A hostname on Cloudflare and an Origin certificate — see [Cloudflare WebSocket Setup](#cloudflare-websocket-setup). |
+| `vless-cf-xhttp` | VLESS Encryption + Vision over XHTTP + TLS, through Cloudflare's network. Useful when the server's IP is blocked. **The recommended Cloudflare profile.** | A hostname on Cloudflare and an Origin certificate — see [Cloudflare Setup](#cloudflare-setup). Clients with a recent Xray core. |
+| `vless-cf-ws` | VLESS over WebSocket + TLS, through Cloudflare's network. | The same as `vless-cf-xhttp`. Kept for clients that don't support XHTTP or VLESS Encryption. |
 
 Only one profile is active at a time. To switch, open the **Profiles** page as the super admin and click **Activate**. The app first checks the profile with `xray run -test`, then restarts Xray with it. Active connections drop for a few seconds, and users must refresh their config URL to get the new link. If Xray doesn't confirm the restart within 30 seconds, the app puts the previous profile back.
 
 The Profiles page lists every folder in `xray/`, and explains why a profile can't be activated yet (for example, a placeholder `install.sh` hasn't filled in, or a missing certificate file). After editing a profile's files by hand, click **Re-apply** on the active profile. See [Writing your own profile](configuration.md#writing-your-own-profile) to add one.
 
-## Cloudflare WebSocket Setup
+## Cloudflare Setup
 
-The `vless-cf-ws` profile sends VPN traffic through Cloudflare. Clients connect to Cloudflare, and Cloudflare connects to your server.
+The Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws`, send VPN traffic through Cloudflare. Clients connect to Cloudflare, and Cloudflare connects to your server. Both use the same hostname and the same Origin certificate, so setting up Cloudflare once enables both.
+
+### Which Cloudflare profile
+
+| | `vless-cf-xhttp` (recommended) | `vless-cf-ws` |
+|---|---|---|
+| Transport | XHTTP (`packet-up` mode, designed for CDNs) | WebSocket — Xray 26 logs that it is deprecated in favour of XHTTP |
+| What Cloudflare can read | Nothing useful: VLESS Encryption keeps the VLESS traffic (user IDs, destinations) opaque, although Cloudflare terminates TLS | Cloudflare terminates TLS, so it sees the VLESS traffic in clear |
+| Flow | XTLS Vision, which VLESS Encryption makes possible over XHTTP | None — "VLESS without flow" is deprecated in Xray |
+| Clients | A recent Xray-core-based app (e.g. a current v2rayN or v2rayNG) that supports XHTTP and VLESS Encryption (`mlkem768x25519plus`) | Any VLESS client with WebSocket support |
+
+If some users' apps can't connect with `vless-cf-xhttp`, activate `vless-cf-ws` instead. Both work with the same Cloudflare setup.
 
 ### Hostnames
 
@@ -228,21 +240,23 @@ You need two hostnames, not two registered domains. Two subdomains of one domain
 | Hostname | Cloudflare DNS record | Used by |
 |----------|-----------------------|---------|
 | `manage.example.com` (`--domain`, and `--host` by default) | **DNS only** (grey cloud) → server IP | The management UI, and the address REALITY clients connect to |
-| `cdn.example.com` (`--cf-domain`) | **Proxied** (orange cloud) → server IP | The WebSocket profile |
+| `cdn.example.com` (`--cf-domain`) | **Proxied** (orange cloud) → server IP | The Cloudflare profiles |
 
 - Keep the management hostname DNS only: Caddy gets its certificate from Let's Encrypt, and REALITY can't pass through Cloudflare.
-- Keep the WebSocket hostname one level deep (`cdn.example.com`, not `ws.cdn.example.com`). Cloudflare's free edge certificate only covers first-level subdomains.
-- If your domain's DNS isn't on Cloudflare, either move its nameservers to Cloudflare, or use a second domain that is on Cloudflare for the WebSocket hostname.
+- Keep the Cloudflare hostname one level deep (`cdn.example.com`, not `ws.cdn.example.com`). Cloudflare's free edge certificate only covers first-level subdomains.
+- If your domain's DNS isn't on Cloudflare, either move its nameservers to Cloudflare, or use a second domain that is on Cloudflare for the Cloudflare hostname.
 
 ### Cloudflare settings
 
-1. **DNS:** create the WebSocket hostname's A record and turn on **Proxied**.
+1. **DNS:** create the Cloudflare hostname's A record and turn on **Proxied**.
 2. **SSL/TLS → Overview:** set the encryption mode to **Full (strict)**.
-3. **Network:** make sure **WebSockets** is on (it is by default).
+3. **Network:** make sure **WebSockets** is on (it is by default) if you use `vless-cf-ws`.
+
+Nothing else is needed for XHTTP. Cloudflare connects to the server over HTTP/1.1, and `vless-cf-xhttp` only offers HTTP/1.1 to it. This is deliberate: Xray's XHTTP server picks HTTP/1.1 or HTTP/2 from the first protocol it advertises, not per connection, and offering only HTTP/1.1 keeps Cloudflare on that even if **HTTP/2 to Origin** is turned on. Clients still use HTTP/2 to Cloudflare.
 
 ### The Origin certificate
 
-Cloudflare connects to your server over TLS, so the server needs a certificate for the WebSocket hostname. A Cloudflare **Origin CA** certificate is free and valid for up to 15 years. Only Cloudflare trusts it, which is all this profile needs: clients only ever see Cloudflare's own certificate.
+Cloudflare connects to your server over TLS, so the server needs a certificate for the Cloudflare hostname. The script installs it into the `tls/` folder of every Cloudflare profile. A Cloudflare **Origin CA** certificate is free and valid for up to 15 years. Only Cloudflare trusts it, which is all this profile needs: clients only ever see Cloudflare's own certificate.
 
 **Option A — let the script create it (recommended).** Create an API token, and the script asks Cloudflare for a certificate covering `--cf-domain`:
 
@@ -276,7 +290,9 @@ How the certificate is made and reused:
   --cf-origin-cert origin.pem --cf-origin-key origin.key
 ```
 
-Either way, this works on a new server and on an existing install (re-run with the same `--domain`). The script refuses a certificate that doesn't match its key or doesn't cover `--cf-domain`. On an existing install, it restarts Xray when the certificate changes. Then open the **Profiles** page and activate `vless-cf-ws`.
+Either way, this works on a new server and on an existing install (re-run with the same `--domain`). The script refuses a certificate that doesn't match its key or doesn't cover `--cf-domain`. On an existing install, it restarts Xray when the certificate changes.
+
+The same run also fills in the Cloudflare profiles. For `vless-cf-xhttp` it generates a VLESS Encryption key pair and a random XHTTP path, saved in `.env` like the REALITY keys. Then open the **Profiles** page and activate `vless-cf-xhttp` (or `vless-cf-ws`).
 
 At the end, the script requests `https://cdn.example.com/` once and warns if something is off:
 
@@ -284,9 +300,7 @@ At the end, the script requests `https://cdn.example.com/` once and warns if som
 |---------|---------|
 | Could not open `https://cdn.example.com` | Cloudflare's edge certificate isn't valid for the hostname: it is more than one level deep, or the zone isn't active on Cloudflare yet. |
 | Not proxied by Cloudflare | The DNS record is grey. VPN clients would reach the server directly, see the Origin certificate, and fail. Turn on the orange cloud. |
-| Cloudflare answered 525 or 526 | Only checked while `vless-cf-ws` is active: Cloudflare couldn't complete TLS with the server (525) or rejected its certificate (526). Check the Origin certificate files and the Full (strict) mode. |
-
-> **Note:** Xray 26 logs that the WebSocket transport is deprecated in favour of XHTTP. It still works; an XHTTP profile can be added the same way later.
+| Cloudflare answered 525 or 526 | Only checked while a Cloudflare profile is active: Cloudflare couldn't complete TLS with the server (525) or rejected its certificate (526). Check the Origin certificate files and the Full (strict) mode. |
 
 ## Data Storage
 

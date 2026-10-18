@@ -1,0 +1,61 @@
+// VLESS + XHTTP + TLS behind Cloudflare, with VLESS Encryption and XTLS Vision.
+// - VLESS Encryption ("decryption" below) lets Vision run over XHTTP, and keeps the VLESS
+//   traffic opaque to Cloudflare, which terminates the outer TLS.
+// - ALPN is http/1.1 only: Xray's XHTTP server picks HTTP/1.1 or h2 from the first ALPN entry,
+//   and Cloudflare connects to the origin over HTTP/1.1. Clients still use h2 to Cloudflare.
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "vless-xhttp",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "mlkem768x25519plus.native.600s.YOUR_VLESS_ENC_PRIVATE_KEY"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "tls",
+        "tlsSettings": {
+          "minVersion": "1.2",
+          "alpn": ["http/1.1"],
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/profiles/vless-cf-xhttp/tls/fullchain.pem",
+              "keyFile": "/etc/xray/profiles/vless-cf-xhttp/tls/privkey.pem"
+            }
+          ]
+        },
+        "xhttpSettings": {
+          "path": "/YOUR_XHTTP_ID",
+          "mode": "auto"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ads-all"
+        ],
+        "outboundTag": "block"
+      }
+    ]
+  }
+}

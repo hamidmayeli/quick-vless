@@ -56,7 +56,7 @@ export function ProfilesPage() {
         <h2 className={styles.title}>Profiles</h2>
       </div>
       <p className={profileStyles.intro}>
-        A profile is a way of serving VPN users, such as REALITY or a WebSocket through Cloudflare. Each one is a
+        A profile is a way of serving VPN users, such as REALITY, or XHTTP through Cloudflare. Each one is a
         folder in <code>xray/</code> on the server. One profile is active at a time, and every user&apos;s config
         URL returns its link.
       </p>

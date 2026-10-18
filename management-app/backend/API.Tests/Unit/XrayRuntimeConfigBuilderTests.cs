@@ -128,6 +128,34 @@ public class XrayRuntimeConfigBuilderTests
         Assert.Equal(expected, XrayRuntimeConfigBuilder.DeriveFlow(inbound));
     }
 
+    [Theory]
+    [InlineData("xhttp", "tls", "mlkem768x25519plus.native.600s.key", "xtls-rprx-vision")]
+    [InlineData("ws", "none", "mlkem768x25519plus.native.600s.key", "xtls-rprx-vision")]
+    [InlineData("xhttp", "tls", "none", "")]
+    [InlineData("xhttp", "tls", "NONE", "")]
+    [InlineData("xhttp", "tls", "", "")]
+    public void DeriveFlow_VlessEncryption_AllowsVisionOnAnyTransport(string network, string security, string decryption, string expected)
+    {
+        var inbound = new JsonObject
+        {
+            ["protocol"] = "vless",
+            ["settings"] = new JsonObject { ["decryption"] = decryption },
+            ["streamSettings"] = new JsonObject { ["network"] = network, ["security"] = security },
+        };
+
+        Assert.Equal(expected, XrayRuntimeConfigBuilder.DeriveFlow(inbound));
+    }
+
+    [Fact]
+    public void Build_XhttpWithVlessEncryption_KeepsDecryptionAndUsesVision()
+    {
+        var built = XrayRuntimeConfigBuilder.Build(Parse(TestProfiles.XhttpConfig("/c.pem", "/k.pem")), [EnabledUser("s1")], 10085);
+
+        var settings = Inbound(built, "vless-xhttp")["settings"]!;
+        Assert.Equal("mlkem768x25519plus.native.600s.private-key", settings["decryption"]!.GetValue<string>());
+        Assert.Equal("xtls-rprx-vision", settings["clients"]![0]!["flow"]!.GetValue<string>());
+    }
+
     [Fact]
     public void StructureHash_SameWhenOnlyUsersChange()
     {

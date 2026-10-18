@@ -32,22 +32,28 @@ const xrayProfiles = {
   last_error: null,
   profiles: [
     {
+      name: 'my-profile',
+      valid: false,
+      errors: ['client-config.template still contains YOUR_CF_DOMAIN: run install.sh with --cf-domain.'],
+      inbounds: [{ tag: 'my-in', network: 'grpc', security: 'tls', port: '443', flow: '' }],
+    },
+    {
       name: 'vless-cf-ws',
       valid: true,
       errors: [],
       inbounds: [{ tag: 'vless-cf', network: 'ws', security: 'tls', port: '443', flow: '' }],
     },
     {
+      name: 'vless-cf-xhttp',
+      valid: true,
+      errors: [],
+      inbounds: [{ tag: 'vless-xhttp', network: 'xhttp', security: 'tls', port: '443', flow: 'xtls-rprx-vision' }],
+    },
+    {
       name: 'vless-reality',
       valid: true,
       errors: [],
       inbounds: [{ tag: 'vless-in', network: 'tcp', security: 'reality', port: '443', flow: 'xtls-rprx-vision' }],
-    },
-    {
-      name: 'vless-xhttp',
-      valid: false,
-      errors: ['client-config.template still contains YOUR_CF_DOMAIN: run install.sh with --cf-domain.'],
-      inbounds: [{ tag: 'vless-xhttp', network: 'xhttp', security: 'tls', port: '443', flow: '' }],
     },
   ],
 }

@@ -64,6 +64,34 @@ internal static class TestProfiles
         }
         """;
 
+    public const string XhttpTemplate =
+        "vless://{{secret}}@cdn.example.com:443?encryption=mlkem768x25519plus.native.0rtt.pub-key&flow=xtls-rprx-vision&security=tls&sni=cdn.example.com&fp=chrome&alpn=h2&type=xhttp&host=cdn.example.com&path=%2Fxh-test&mode=packet-up#{{name}}";
+
+    /// <summary>VLESS Encryption + Vision over XHTTP + TLS, like the shipped vless-cf-xhttp profile.</summary>
+    public static string XhttpConfig(string certPath, string keyPath) => $$"""
+        {
+          "inbounds": [
+            {
+              "tag": "vless-xhttp",
+              "listen": "0.0.0.0",
+              "port": 443,
+              "protocol": "vless",
+              "settings": { "clients": [], "decryption": "mlkem768x25519plus.native.600s.private-key" },
+              "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "tlsSettings": {
+                  "alpn": ["http/1.1"],
+                  "certificates": [ { "certificateFile": "{{certPath}}", "keyFile": "{{keyPath}}" } ]
+                },
+                "xhttpSettings": { "path": "/xh-test", "mode": "auto" }
+              }
+            }
+          ],
+          "outbounds": [ { "protocol": "freedom", "tag": "direct" } ]
+        }
+        """;
+
     /// <summary>Writes a profile folder and returns its path.</summary>
     public static string Write(string profilesDir, string name, string config, string? template)
     {

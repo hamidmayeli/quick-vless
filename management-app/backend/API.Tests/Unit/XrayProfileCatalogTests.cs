@@ -146,9 +146,29 @@ public sealed class XrayProfileCatalogTests : IDisposable
         Assert.True(Load(TestProfiles.RealityConfig.Replace("\"port\": 443", "\"port\": \"443\"")).IsValid);
     }
 
+    [Fact]
+    public void Load_XhttpWithVlessEncryption_IsValidAndNeedsVisionInTheLink()
+    {
+        var tls = Path.Combine(_dir, "certs");
+        Directory.CreateDirectory(tls);
+        var cert = Path.Combine(tls, "fullchain.pem").Replace('\\', '/');
+        var key = Path.Combine(tls, "privkey.pem").Replace('\\', '/');
+        File.WriteAllText(cert, "c");
+        File.WriteAllText(key, "k");
+
+        var valid = Load(TestProfiles.XhttpConfig(cert, key), TestProfiles.XhttpTemplate);
+        Assert.True(valid.IsValid, string.Join(" | ", valid.Errors));
+        Assert.Equal(new XrayInboundInfo("vless-xhttp", "xhttp", "tls", "443", "xtls-rprx-vision"), Assert.Single(valid.Inbounds));
+
+        AssertError(Load(TestProfiles.XhttpConfig(cert, key), TestProfiles.XhttpTemplate.Replace("&flow=xtls-rprx-vision", "")),
+            "needs flow=xtls-rprx-vision");
+    }
+
     [Theory]
     [InlineData("YOUR_CF_DOMAIN", "run install.sh with --cf-domain")]
     [InlineData("YOUR_WS_ID", "run install.sh with --cf-domain")]
+    [InlineData("YOUR_XHTTP_ID", "run install.sh with --cf-domain")]
+    [InlineData("YOUR_VLESS_ENC_PRIVATE_KEY", "run install.sh to generate the VLESS Encryption keys")]
     [InlineData("YOUR_PRIVATE_KEY", "run install.sh to fill in the REALITY settings")]
     [InlineData("YOUR_SOMETHING", "replace it by hand")]
     public void Load_UnfilledInstallPlaceholder_SaysHowToFillIt(string placeholder, string hint)

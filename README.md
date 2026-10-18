@@ -1,6 +1,6 @@
 # easy-xray
 
-Self-hosted VLESS VPN manager with a web UI. Provision users, track bandwidth usage, and distribute connection configs — all from a browser. Built on [Xray-core](https://github.com/XTLS/Xray-core). Ships with two connection **profiles**: VLESS + TCP + REALITY + Vision, and VLESS + WebSocket + TLS through Cloudflare. The super admin picks the active one in the UI.
+Self-hosted VLESS VPN manager with a web UI. Provision users, track bandwidth usage, and distribute connection configs — all from a browser. Built on [Xray-core](https://github.com/XTLS/Xray-core). Ships with connection **profiles**: VLESS + TCP + REALITY + Vision, and two that go through Cloudflare (VLESS Encryption + Vision over XHTTP, and VLESS over WebSocket). The super admin picks the active one in the UI.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ cd quick-vless
 
 # 2. Run the install script (all secrets are auto-generated)
 ./install.sh --domain manage.example.com
-#    Optional: also set up the Cloudflare WebSocket profile. With a Cloudflare API
+#    Optional: also set up the Cloudflare profiles (XHTTP and WebSocket). With a Cloudflare API
 #    token in CF_API_TOKEN, the script creates the Origin certificate itself
 #    (docs/hosting.md shows how to pass the token without saving it in shell history):
 #    ./install.sh --domain manage.example.com --cf-domain cdn.example.com

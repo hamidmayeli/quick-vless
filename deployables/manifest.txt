@@ -10,3 +10,5 @@ xray/vless-reality/config.json
 xray/vless-reality/client-config.template
 xray/vless-cf-ws/config.json
 xray/vless-cf-ws/client-config.template
+xray/vless-cf-xhttp/config.json
+xray/vless-cf-xhttp/client-config.template

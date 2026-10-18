@@ -17,8 +17,11 @@ All configuration is supplied through environment variables in `deployables/.env
 | `XRAY_REALITY_SHORT_ID` | Yes | Auto-generated | An 8-character hex string (e.g. `a1b2c3d4`). Part of the REALITY handshake. |
 | `XRAY_SNI` | No | `dl.google.com` | The domain that Xray impersonates. Must be a public domain with a valid TLS certificate on port 443. Do not use your own domain here. |
 | `XRAY_FINGERPRINT` | No | `chrome` | TLS client fingerprint to mimic. Options: `chrome`, `firefox`, `safari`, `ios`, `android`, `edge`, `360`, `qq`, `random`, `randomized`. |
-| `XRAY_CF_DOMAIN` | No | — | Hostname proxied by Cloudflare for the `vless-cf-ws` profile (e.g. `cdn.example.com`). Empty keeps that profile disabled. See [Cloudflare WebSocket Setup](hosting.md#cloudflare-websocket-setup). |
+| `XRAY_CF_DOMAIN` | No | — | Hostname proxied by Cloudflare for the Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws` (e.g. `cdn.example.com`). Empty keeps them disabled. See [Cloudflare Setup](hosting.md#cloudflare-setup). |
 | `XRAY_WS_ID` | No | Auto-generated | WebSocket path of the `vless-cf-ws` profile, without the leading slash (e.g. `ws-3f9c…`). Random per server. |
+| `XRAY_XHTTP_ID` | No | Auto-generated | XHTTP path of the `vless-cf-xhttp` profile, without the leading slash (e.g. `xh-8a1d…`). Random per server. |
+| `XRAY_VLESS_ENC_PRIVATE_KEY` | No | Auto-generated | VLESS Encryption private key of `vless-cf-xhttp` (X25519, the same format as the REALITY keys). Goes into its `config.json`. Keep it secret. |
+| `XRAY_VLESS_ENC_PUBLIC_KEY` | No | Auto-generated | The matching public key (Xray calls it the "password"). Goes into its `client-config.template`. |
 
 The `XRAY_*` values above (except `XRAY_DEFAULT_PROFILE`) aren't read by the running containers. `install.sh` writes them into the profile files and keeps them in `.env` so a re-run fills in the same values.
 
@@ -95,7 +98,12 @@ A normal Xray config:
 - **Certificate paths are container paths:** a file at `<deploy-dir>/xray/my-profile/tls/cert.pem` is `/etc/xray/profiles/my-profile/tls/cert.pem`.
 - Comments and trailing commas are allowed.
 
-The app picks each user's `flow` per inbound: `xtls-rprx-vision` on raw TCP with `tls` or `reality`, and none on every other transport (WebSocket, gRPC, XHTTP…).
+The app picks each user's `flow` per inbound. It uses `xtls-rprx-vision` in two cases:
+
+- on raw TCP with `tls` or `reality`;
+- on any transport when the inbound uses VLESS Encryption, i.e. its `settings.decryption` is set to something other than `none` (generate one with `xray vlessenc`).
+
+Otherwise (e.g. plain VLESS over WebSocket) it uses no flow.
 
 ### client-config.template
 
@@ -110,7 +118,9 @@ The link must match the inbound: include `flow=xtls-rprx-vision` exactly when th
 
 ### Install-time placeholders
 
-The shipped profiles use `YOUR_*` placeholders that `install.sh` fills in from `.env`: `YOUR_PRIVATE_KEY`, `YOUR_PUBLIC_KEY`, `YOUR_SHORT_ID`, `YOUR_SNI`, `YOUR_HOST`, `YOUR_FINGERPRINT`, `YOUR_CF_DOMAIN` and `YOUR_WS_ID`. Your own profiles can use them too, or contain literal values. A profile that still contains a `YOUR_*` placeholder can't be activated.
+The shipped profiles use `YOUR_*` placeholders that `install.sh` fills in from `.env`: `YOUR_PRIVATE_KEY`, `YOUR_PUBLIC_KEY`, `YOUR_SHORT_ID`, `YOUR_SNI`, `YOUR_HOST`, `YOUR_FINGERPRINT`, `YOUR_CF_DOMAIN`, `YOUR_WS_ID`, `YOUR_XHTTP_ID`, `YOUR_VLESS_ENC_PRIVATE_KEY` and `YOUR_VLESS_ENC_PUBLIC_KEY`. Your own profiles can use them too, or contain literal values. A profile that still contains a `YOUR_*` placeholder can't be activated.
+
+A profile that terminates TLS with the Cloudflare Origin certificate gets it from `install.sh` automatically. Its `config.json` must read the certificate from the profile's own folder: `/etc/xray/profiles/<name>/tls/fullchain.pem` and `privkey.pem`.
 
 ### Validation
 
