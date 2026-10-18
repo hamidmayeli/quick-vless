@@ -5,9 +5,10 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { LoginPage } from '@/pages/LoginPage'
 import { UsersPage } from '@/pages/UsersPage'
 import { UsagePage } from '@/pages/UsagePage'
+import { AdminsPage } from '@/pages/AdminsPage'
 
 export function App() {
-  const { isAuthenticated, login, logout } = useAuth()
+  const { isAuthenticated, session, isSuperAdmin, login, logout } = useAuth()
 
   return (
     <BrowserRouter>
@@ -19,13 +20,14 @@ export function App() {
         <Route
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout onLogout={logout} />
+              <Layout onLogout={logout} username={session?.username ?? null} isSuperAdmin={isSuperAdmin} />
             </ProtectedRoute>
           }
         >
           <Route index element={<Navigate to="/users" replace />} />
-          <Route path="/users" element={<UsersPage />} />
+          <Route path="/users" element={<UsersPage showOwner={isSuperAdmin} />} />
           <Route path="/usage" element={<UsagePage />} />
+          <Route path="/admins" element={isSuperAdmin ? <AdminsPage /> : <Navigate to="/users" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

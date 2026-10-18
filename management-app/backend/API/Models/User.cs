@@ -9,4 +9,6 @@ public sealed class User
     public DateOnly? Expiry { get; set; }
     public bool SingleConnection { get; set; }
     public bool Enabled { get; set; }
+    // Username of the admin who created the user. Null for users created before admin scoping existed.
+    public string? CreatedBy { get; set; }
 }

@@ -44,6 +44,8 @@ Stores user identities, proxy settings, quota limits, and current connection sta
 
 *Note: `quota: null` signifies unlimited traffic.*
 
+*Each user also stores `created_by`: the username of the admin who created it. Users created before admin scoping existed have `created_by: null` and are visible only to the super admin.*
+
 ### 1.2 Usage Log (`usage_history/20260913.csv`)
 
 Appends periodic byte-count snapshots to calculate consumption without modifying historical entries.
@@ -60,19 +62,30 @@ user name,55000000,1100000000,1155000000
 Stores the api users (AKA admins)
 
 ```json
-{
-    "admin": {
-        "password": {
-            "hash": "XXXXXX",
-            "salt": "xxxxxxx"
-        },
-        "refreshTokens": [{
-            "token": "c3d4e5f6-a7b8-4c0d-9e2f-3a4b5c6d7e8f",
-            "expiry": ....
-        }]
-    }
-}
+[
+  {
+    "username": "root",
+    "role": "super_admin",
+    "password_hash": "XXXXXX",
+    "password_salt": "xxxxxxx",
+    "refresh_tokens": [{
+      "token": "c3d4e5f6...",
+      "expiry": "2026-11-17T10:00:00Z"
+    }]
+  },
+  {
+    "username": "alice",
+    "role": "admin",
+    "password_hash": null,
+    "password_salt": null,
+    "refresh_tokens": []
+  }
+]
 ```
+
+* `role`: exactly one `super_admin` — the account created by the first login. Other admins are `admin`.
+* `password_hash: null` means the admin is *pending*: the password sent on their first login becomes their password.
+* Files written before roles existed have no `role`; on startup the first admin is promoted to `super_admin`.
 
 ---
 
@@ -84,9 +97,10 @@ Stores the api users (AKA admins)
     ```
     vless://a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d@YOUR_SERVER_IP:443?security=reality&encryption=none&pbk=YOUR_PUBLIC_KEY&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=dl.google.com&sid=YOUR_SHORT_ID#UserA-Server1
     ```
-* **User management endpoints**: The CRUD endpoints for users 
-* **Authentication endpoints**: Login and refresh token and other required endpoints
-* **Usage report**: returning the usage users
+* **User management endpoints**: The CRUD endpoints for users. The super admin sees all users; other admins only see (and can only change) the users they created.
+* **Admin management endpoints** (super admin only): `GET /admins`, `POST /admins` (`{ "username": "..." }`, created without a password), `DELETE /admins/{username}` (reassigns the admin's users to the super admin).
+* **Authentication endpoints**: Login and refresh token and other required endpoints. The first login on an empty store creates the super admin. Access tokens carry the admin's role; every request re-checks the admin in `admins.json`, so deleted admins are rejected immediately.
+* **Usage report**: returning the usage users, scoped like the user list
 
 ### 2.2 Configuration Management
 

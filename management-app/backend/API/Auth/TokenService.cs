@@ -30,14 +30,14 @@ public sealed class TokenService(IConfiguration config)
         return CryptographicOperations.FixedTimeEquals(expected, Convert.FromBase64String(hash));
     }
 
-    public string CreateAccessToken(string username)
+    public string CreateAccessToken(string username, AdminRole role)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(
             issuer: _issuer,
             audience: _issuer,
-            claims: [new Claim(ClaimTypes.Name, username)],
+            claims: [new Claim(ClaimTypes.Name, username), new Claim(ClaimTypes.Role, role.ToClaimValue())],
             expires: DateTime.UtcNow.AddMinutes(_accessMinutes),
             signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);

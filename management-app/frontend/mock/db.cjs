@@ -19,7 +19,8 @@ module.exports = function() {
         "quota": 53687091200,
         "expiry": "2027-06-01",
         "single_connection": false,
-        "enabled": true
+        "enabled": true,
+        "created_by": "admin"
       },
       {
         "id": "user-2",
@@ -27,7 +28,8 @@ module.exports = function() {
         "quota": null,
         "expiry": null,
         "single_connection": true,
-        "enabled": true
+        "enabled": true,
+        "created_by": "admin"
       },
       {
         "id": "user-3",
@@ -35,8 +37,15 @@ module.exports = function() {
         "quota": 10737418240,
         "expiry": "2026-12-31",
         "single_connection": false,
-        "enabled": false
+        "enabled": false,
+        "created_by": "alice"
       }
+    ],
+    // Keyed by username so DELETE /admins/:username works with the faker.
+    "admins": [
+      { "id": "admin", "username": "admin", "role": "super_admin", "status": "active", "user_count": 2 },
+      { "id": "alice", "username": "alice", "role": "admin", "status": "active", "user_count": 1 },
+      { "id": "bob", "username": "bob", "role": "admin", "status": "pending", "user_count": 0 }
     ],
     "usage": [],
     "configs": [

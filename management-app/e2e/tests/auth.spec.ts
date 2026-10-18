@@ -7,7 +7,12 @@ test.describe('Auth flow', () => {
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
   })
 
-  test('first login creates admin and redirects to /users', async ({ page }) => {
+  test('login page explains first-time sign-in', async ({ page }) => {
+    await page.goto('/login')
+    await expect(page.getByText(/first time signing in\? use the username you were given/i)).toBeVisible()
+  })
+
+  test('first login creates the super admin and redirects to /users', async ({ page }) => {
     await page.goto('/login')
     await page.locator('input[type="text"]').fill('admin')
     await page.locator('input[type="password"]').fill('password123')
@@ -15,6 +20,7 @@ test.describe('Auth flow', () => {
 
     await expect(page).toHaveURL('/users')
     await expect(page.locator('h2')).toContainText('Users')
+    await expect(page.getByRole('link', { name: 'Admins' })).toBeVisible()
   })
 
   test('login stores refresh token as an HttpOnly Strict cookie', async ({ page }) => {

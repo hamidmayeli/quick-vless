@@ -50,6 +50,12 @@
 .links a.active,
 .navButton.active { background: #7c7cff22; color: #7c7cff; }
 
+.whoami {
+  font-size: 0.82rem;
+  color: #8080a0;
+  white-space: nowrap;
+}
+
 .logout {
   padding: 0.35rem 0.85rem;
   border-radius: 6px;

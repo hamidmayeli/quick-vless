@@ -32,6 +32,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       <form className={styles.card} onSubmit={handleSubmit}>
         <h1 className={styles.title}>Easy Xray</h1>
         <p className={styles.subtitle}>Sign in to manage your users</p>
+        <p className={styles.hint}>First time signing in? Use the username you were given and choose your password.</p>
         {error && <p className={styles.error}>{error}</p>}
         <label className={styles.label}>
           Username

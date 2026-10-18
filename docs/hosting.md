@@ -137,7 +137,24 @@ curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/
 
 ## First Login
 
-Navigate to `https://manage.example.com` in a browser. Enter any username and password — the first successful login creates the admin account with those credentials. Subsequent logins require the same credentials.
+Navigate to `https://manage.example.com` in a browser. Enter any username and password — the first successful login creates the **super admin** account with those credentials. Subsequent logins require the same credentials.
+
+The super admin sees every VPN user and all usage, and is the only account that can manage other admins.
+
+## Adding Admins
+
+1. As the super admin, open the **Admins** page and click **Add Admin**.
+2. Enter a username (letters, digits, `.`, `_`, `@`, `-`; up to 64 characters) and click **Save**. No password is set — the admin is listed as **Pending first login**.
+3. Share the username with the new admin. The first time they sign in, the password they type becomes their password.
+4. Admins only see the VPN users they created, and only those users' usage.
+
+> **Note:** Until a pending admin signs in, anyone who knows the username can sign in first and choose the password. Ask new admins to sign in soon after you create them. If an account was claimed by the wrong person, delete it and create it again.
+
+Deleting an admin signs them out immediately. Their VPN users are not deleted — they are reassigned to the super admin, so their clients keep working.
+
+### Recovering a Lost Password
+
+There is no password reset in the UI. To let an admin (including the super admin) choose a new password, edit `/data/admins.json` on the server and set that admin's `password_hash` and `password_salt` to `null`. Their next sign-in sets the new password. Do this only when you can sign in right away, since the account is claimable until then.
 
 ## Adding VPN Users
 
@@ -152,8 +169,8 @@ All persistent data lives in a named Docker volume `quick-vless_app-data`, mount
 
 | Path | Contents |
 |------|----------|
-| `/data/users.json` | VPN user accounts (name, UUID, quota, expiry, enabled) |
-| `/data/admins.json` | Management UI admin accounts (hashed passwords) |
+| `/data/users.json` | VPN user accounts (name, UUID, quota, expiry, enabled, `created_by` admin) |
+| `/data/admins.json` | Management UI admin accounts (role, hashed password — `null` while pending first login) |
 | `/data/usage_history/` | Daily bandwidth snapshots in CSV format (`YYYYMMDD.csv`) |
 
 The Xray configuration template lives in `xray/config.json` inside the deploy directory on the host and is bind-mounted into both the `xray` and `app` containers.

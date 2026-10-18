@@ -1,4 +1,5 @@
 using API.Auth;
+using API.Models;
 using API.Storage;
 
 namespace API.Endpoints;
@@ -20,39 +21,57 @@ public static class AuthEndpoints
             {
                 logger.LogDebug("POST /auth/login username={Username}", req.Username);
 
+                if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
+                {
+                    logger.LogWarning("Login rejected — blank username or password");
+                    return Results.BadRequest();
+                }
+
                 var admin = await admins.GetByUsernameAsync(req.Username);
                 if (admin is null)
                 {
-                    var existing = await admins.GetAllAsync();
-                    if (existing.Count == 0)
-                    {
-                        logger.LogInformation("No admins exist — creating first admin: {Username}", req.Username);
-                        var (hash, salt) = tokens.HashPassword(req.Password);
-                        admin = new()
-                        {
-                            Username = req.Username,
-                            PasswordHash = hash,
-                            PasswordSalt = salt,
-                        };
-                        await admins.UpdateAsync(admin);
-                    }
-                    else
+                    var (hash, salt) = tokens.HashPassword(req.Password);
+                    admin = await admins.CreateFirstSuperAdminAsync(req.Username, hash, salt);
+                    if (admin is null)
                     {
                         logger.LogWarning("Unknown username {Username} rejected", req.Username);
                         return Results.Unauthorized();
                     }
+                    logger.LogInformation("No admins exist — created super admin {Username}", admin.Username);
                 }
-                else if (!tokens.VerifyPassword(admin.PasswordHash, admin.PasswordSalt, req.Password))
+                else if (admin.IsPending)
+                {
+                    var (hash, salt) = tokens.HashPassword(req.Password);
+                    var claimed = await admins.SetInitialPasswordAsync(admin.Username, hash, salt);
+                    if (claimed is not null)
+                    {
+                        admin = claimed;
+                        logger.LogInformation("Initial password set for {Username}", admin.Username);
+                    }
+                    else
+                    {
+                        // Another login set the password first — treat this one as a normal login.
+                        admin = await admins.GetByUsernameAsync(req.Username);
+                        if (admin is null || !IsValidPassword(tokens, admin, req.Password))
+                        {
+                            logger.LogWarning("Invalid password for {Username}", req.Username);
+                            return Results.Unauthorized();
+                        }
+                    }
+                }
+                else if (!IsValidPassword(tokens, admin, req.Password))
                 {
                     logger.LogWarning("Invalid password for {Username}", req.Username);
                     return Results.Unauthorized();
                 }
 
-                var access = tokens.CreateAccessToken(admin.Username);
+                var access = tokens.CreateAccessToken(admin.Username, admin.Role);
                 var (refresh, expiry) = tokens.CreateRefreshToken();
-                admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow);
-                admin.RefreshTokens.Add(new() { Token = refresh, Expiry = expiry });
-                await admins.UpdateAsync(admin);
+                if (!await admins.AddRefreshTokenAsync(admin.Username, new() { Token = refresh, Expiry = expiry }, revokeToken: null))
+                {
+                    logger.LogWarning("Admin {Username} was removed during login", admin.Username);
+                    return Results.Unauthorized();
+                }
 
                 logger.LogInformation("Login successful for {Username}", admin.Username);
                 return TokenResponseWithRefreshCookie(access, refresh, expiry);
@@ -69,22 +88,28 @@ public static class AuthEndpoints
 
             httpRequest.Cookies.TryGetValue(RefreshCookieName, out var refreshToken);
             var admin = await admins.GetByUsernameAsync(req.Username);
-            if (admin is null || refreshToken is null || !tokens.ValidateRefreshToken(admin, refreshToken))
+            if (admin is null || admin.IsPending || refreshToken is null || !tokens.ValidateRefreshToken(admin, refreshToken))
             {
                 logger.LogWarning("Refresh token invalid or expired for {Username}", req.Username);
                 return Results.Unauthorized();
             }
 
-            var access = tokens.CreateAccessToken(admin.Username);
+            var access = tokens.CreateAccessToken(admin.Username, admin.Role);
             var (refresh, expiry) = tokens.CreateRefreshToken();
-            admin.RefreshTokens.RemoveAll(rt => rt.Expiry <= DateTime.UtcNow || rt.Token == refreshToken);
-            admin.RefreshTokens.Add(new() { Token = refresh, Expiry = expiry });
-            await admins.UpdateAsync(admin);
+            if (!await admins.AddRefreshTokenAsync(admin.Username, new() { Token = refresh, Expiry = expiry }, revokeToken: refreshToken))
+            {
+                logger.LogWarning("Admin {Username} was removed during refresh", admin.Username);
+                return Results.Unauthorized();
+            }
 
             logger.LogInformation("Token refreshed for {Username}", admin.Username);
             return TokenResponseWithRefreshCookie(access, refresh, expiry);
         });
     }
+
+    private static bool IsValidPassword(TokenService tokens, Admin admin, string password) =>
+        admin is { PasswordHash: not null, PasswordSalt: not null }
+        && tokens.VerifyPassword(admin.PasswordHash, admin.PasswordSalt, password);
 
     private static IResult TokenResponseWithRefreshCookie(string accessToken, string refreshToken, DateTime expiry)
     {

@@ -1,36 +1,27 @@
 import { test, expect, type Page } from '@playwright/test'
+import { SUPER_ADMIN, apiLogin, authHeader, createUser, openAs } from './helpers'
 
 async function loginAndNavigate(page: Page) {
-  const res = await page.request.post('/api/v1/auth/login', {
-    data: { username: 'admin', password: 'password123' },
-  })
-  const { access_token } = await res.json()
-  await page.goto('/users')
-  await page.evaluate(
-    ({ at }) => {
-      localStorage.setItem('access_token', at)
-    },
-    { at: access_token },
-  )
-  await page.reload()
-  await expect(page).toHaveURL('/users')
+  await openAs(page, SUPER_ADMIN, '/users')
 }
 
 test.describe('User management', () => {
   test.beforeEach(async ({ request }) => {
-    const res = await request.post('/api/v1/auth/login', {
-      data: { username: 'admin', password: 'password123' },
-    })
-    const { access_token } = await res.json()
-    const usersRes = await request.get('/api/v1/users', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    })
+    // The super admin sees every user, so this wipes the whole user list.
+    const token = await apiLogin(request, SUPER_ADMIN)
+    const usersRes = await request.get('/api/v1/users', { headers: authHeader(token) })
     const users = await usersRes.json()
     for (const user of users) {
-      await request.delete(`/api/v1/users/${user.id}`, {
-        headers: { Authorization: `Bearer ${access_token}` },
-      })
+      await request.delete(`/api/v1/users/${user.id}`, { headers: authHeader(token) })
     }
+  })
+
+  test('super admin sees the Owner column', async ({ page, request }) => {
+    await createUser(request, await apiLogin(request, SUPER_ADMIN), 'OwnedBySuper')
+    await loginAndNavigate(page)
+
+    await expect(page.getByRole('columnheader', { name: 'Owner' })).toBeVisible()
+    await expect(page.getByRole('row', { name: /OwnedBySuper/ })).toContainText(SUPER_ADMIN.username)
   })
 
   test('users page shows empty state message', async ({ page }) => {

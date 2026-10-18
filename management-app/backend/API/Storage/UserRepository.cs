@@ -57,6 +57,24 @@ public sealed class UserRepository(IConfiguration config)
         finally { _lock.Release(); }
     }
 
+    /// <summary>Moves every user created by <paramref name="fromUsername"/> to <paramref name="toUsername"/>. Returns the number moved.</summary>
+    public async Task<int> ReassignOwnerAsync(string fromUsername, string toUsername)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var users = await GetAllAsync();
+            var owned = users
+                .Where(u => string.Equals(u.CreatedBy, fromUsername, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (owned.Count == 0) return 0;
+            foreach (var user in owned) user.CreatedBy = toUsername;
+            await SaveAllAsync(users);
+            return owned.Count;
+        }
+        finally { _lock.Release(); }
+    }
+
     public async Task<bool> DeleteAsync(string id)
     {
         await _lock.WaitAsync();

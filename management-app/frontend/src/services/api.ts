@@ -1,6 +1,15 @@
-import type { AuthTokens, User, UsageRecord } from '@/types'
+import type { Admin, AdminRole, AuthTokens, Session, User, UsageRecord } from '@/types'
 
 const BASE = '/api/v1'
+
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, statusText: string) {
+    super(`${status} ${statusText}`)
+    this.status = status
+  }
+}
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('access_token')
@@ -16,11 +25,15 @@ function accessTokenExpiresSoon(token: string): boolean {
   }
 }
 
-function usernameFromAccessToken(token: string): string | null {
+// The backend emits full claim-type URIs (e.g. ".../claims/name"); the mock API uses short names.
+export function sessionFromAccessToken(token: string): Session | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>
-    const name = Object.entries(payload).find(([key]) => key === 'name' || key.endsWith('/name'))?.[1]
-    return typeof name === 'string' ? name : null
+    const claim = (name: string) => Object.entries(payload).find(([key]) => key === name || key.endsWith(`/${name}`))?.[1]
+    const username = claim('name')
+    if (typeof username !== 'string') return null
+    const role: AdminRole = claim('role') === 'super_admin' ? 'super_admin' : 'admin'
+    return { username, role }
   } catch {
     return null
   }
@@ -30,7 +43,7 @@ let refreshPromise: Promise<void> | null = null
 
 async function refreshAccessToken(): Promise<void> {
   const accessToken = localStorage.getItem('access_token')
-  const username = accessToken ? usernameFromAccessToken(accessToken) : null
+  const username = accessToken ? sessionFromAccessToken(accessToken)?.username : null
   if (!username) throw new Error('Unable to refresh session')
 
   const res = await fetch(`${BASE}/auth/refresh`, {
@@ -64,7 +77,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error('Unauthorized')
   }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) throw new ApiError(res.status, res.statusText)
   if (res.status === 204) return undefined as T
   return res.json()
 }
@@ -94,6 +107,16 @@ export const usersApi = {
     request(`/users/${id}`, { method: 'PUT', body: JSON.stringify({ id, ...data }) }),
 
   remove: (id: string): Promise<void> => request(`/users/${id}`, { method: 'DELETE' }),
+}
+
+export const adminsApi = {
+  list: (): Promise<Admin[]> => request('/admins'),
+
+  create: (username: string): Promise<Admin> =>
+    request('/admins', { method: 'POST', body: JSON.stringify({ username }) }),
+
+  remove: (username: string): Promise<void> =>
+    request(`/admins/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 }
 
 export const usageApi = {

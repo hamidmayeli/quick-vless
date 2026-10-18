@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using API.Auth;
 using API.Models;
 using API.Services;
 using API.Storage;
@@ -12,15 +14,16 @@ public static class UsersEndpoints
     {
         var group = builder.MapGroup("/users").RequireAuthorization();
 
-        group.MapGet("/", async (UserRepository repo, ILogger<Log> logger) =>
+        group.MapGet("/", async (ClaimsPrincipal me, UserRepository repo, ILogger<Log> logger) =>
         {
-            var users = await repo.GetAllAsync();
-            logger.LogInformation("GET /users — {Count} users returned", users.Count);
+            var users = (await repo.GetAllAsync()).Where(me.CanSee).ToList();
+            logger.LogInformation("GET /users — {Count} users returned to {Admin}", users.Count, me.GetUsername());
             return Results.Ok(users);
         });
 
         group.MapPost("/", async (
             CreateUserRequest req,
+            ClaimsPrincipal me,
             UserRepository repo,
             XrayService xray,
             XrayConfigFileService configFile,
@@ -35,17 +38,20 @@ public static class UsersEndpoints
                 Expiry = req.Expiry,
                 SingleConnection = req.SingleConnection,
                 Enabled = req.Enabled,
+                CreatedBy = me.GetUsername(),
             };
             await repo.AddAsync(user);
             if (user.Enabled) await xray.AddUserAsync(user);
             await configFile.SyncAsync();
-            logger.LogInformation("POST /users — created user {Name} id={Id} enabled={Enabled}", user.Name, user.Id, user.Enabled);
+            logger.LogInformation("POST /users — {Admin} created user {Name} id={Id} enabled={Enabled}",
+                user.CreatedBy, user.Name, user.Id, user.Enabled);
             return Results.Created($"/users/{user.Id}", user);
         });
 
         group.MapPut("/{id}", async (
             string id,
             UpdateUserRequest req,
+            ClaimsPrincipal me,
             UserRepository repo,
             XrayService xray,
             XrayConfigFileService configFile,
@@ -53,7 +59,7 @@ public static class UsersEndpoints
         {
             logger.LogDebug("PUT /users/{Id}", id);
             var existing = await repo.GetByIdAsync(id);
-            if (existing is null)
+            if (existing is null || !me.CanSee(existing))
             {
                 logger.LogWarning("PUT /users/{Id} — not found", id);
                 return Results.NotFound();
@@ -77,6 +83,7 @@ public static class UsersEndpoints
 
         group.MapDelete("/{id}", async (
             string id,
+            ClaimsPrincipal me,
             UserRepository repo,
             XrayService xray,
             XrayConfigFileService configFile,
@@ -84,7 +91,7 @@ public static class UsersEndpoints
         {
             logger.LogDebug("DELETE /users/{Id}", id);
             var user = await repo.GetByIdAsync(id);
-            if (user is null)
+            if (user is null || !me.CanSee(user))
             {
                 logger.LogWarning("DELETE /users/{Id} — not found", id);
                 return Results.NotFound();

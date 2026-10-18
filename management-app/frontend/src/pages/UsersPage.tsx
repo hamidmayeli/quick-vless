@@ -14,7 +14,12 @@ const EMPTY_FORM: UserForm = {
   enabled: true,
 }
 
-export function UsersPage() {
+interface UsersPageProps {
+  // The super admin sees every admin's users, so show who created each one.
+  showOwner: boolean
+}
+
+export function UsersPage({ showOwner }: UsersPageProps) {
   const { users, loading, error, create, update, remove, toggle } = useUsers()
   const [editing, setEditing] = useState<User | null>(null)
   const [creating, setCreating] = useState(false)
@@ -118,6 +123,7 @@ export function UsersPage() {
           <thead>
             <tr>
               <th>Name</th>
+              {showOwner && <th>Owner</th>}
               <th>Quota</th>
               <th>Expiry</th>
               <th>Single conn.</th>
@@ -129,6 +135,7 @@ export function UsersPage() {
             {users.map((u) => (
               <tr key={u.id} className={!u.enabled ? styles.disabled : ''}>
                 <td data-label="Name">{u.name}</td>
+                {showOwner && <td data-label="Owner">{u.created_by ?? '—'}</td>}
                 <td data-label="Quota">{formatQuota(u.quota)}</td>
                 <td data-label="Expiry">{u.expiry ?? '—'}</td>
                 <td data-label="Single conn.">{u.single_connection ? 'Yes' : 'No'}</td>
