@@ -37,9 +37,10 @@ cd quick-vless
 
 # 2. Run the install script (all secrets are auto-generated)
 ./install.sh --domain manage.example.com
-#    Optional: also set up the Cloudflare WebSocket profile (see docs/hosting.md)
-#    ./install.sh --domain manage.example.com --cf-domain cdn.example.com \
-#      --cf-origin-cert origin.pem --cf-origin-key origin.key
+#    Optional: also set up the Cloudflare WebSocket profile. With a Cloudflare API
+#    token in CF_API_TOKEN, the script creates the Origin certificate itself
+#    (docs/hosting.md shows how to pass the token without saving it in shell history):
+#    ./install.sh --domain manage.example.com --cf-domain cdn.example.com
 
 # 3. Open the management UI
 #    https://manage.example.com

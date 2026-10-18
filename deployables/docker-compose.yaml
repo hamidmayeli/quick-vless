@@ -23,7 +23,7 @@ services:
   # Profiles and the runtime config are mounted at the same paths as in the xray
   # container, so certificate paths inside a profile resolve the same in both.
   app:
-    image: hamidmayeli/quick-vless:latest
+    image: hamidmayeli/quick-vless:${APP_IMAGE_TAG:-latest}
     restart: unless-stopped
     networks:
       - vpn

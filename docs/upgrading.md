@@ -11,6 +11,8 @@ curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/
   | sudo bash -s -- --domain manage.example.com --upgrade
 ```
 
+The files come from the branch you installed from (`INSTALL_BRANCH` in `.env`, `main` by default). Pass `--branch` to change it — see [Installing from a branch](hosting.md#installing-from-a-branch).
+
 `--upgrade` replaces the deployment files and keeps a `.bak` copy of each. It never overwrites a profile file in `xray/`; it only adds missing ones. Then it pulls the images and re-creates the containers. User data in `data/` is not affected.
 
 From a clone, run `git pull` first, then `./install.sh --domain manage.example.com --upgrade`.

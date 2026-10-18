@@ -8,6 +8,8 @@ All configuration is supplied through environment variables in `deployables/.env
 |---|---|---|---|
 | `JWT_SECRET` | Yes | Auto-generated | Random secret used to sign JWT tokens for the management UI. Must be at least 32 characters. Never share or commit this value. |
 | `MANAGEMENT_DOMAIN` | Yes | — | Fully-qualified domain name for the management UI (e.g. `manage.example.com`). Caddy issues a TLS certificate for this domain automatically. |
+| `INSTALL_BRANCH` | No | `main` | The branch `install.sh` downloads the deployment files from. Set by `--branch`; later runs (including `--upgrade`) use it again. |
+| `APP_IMAGE_TAG` | No | `latest` | Tag of the `hamidmayeli/quick-vless` app image. `latest` is built from `main`; a pull request build publishes `pr-<number>`. Set by `--image-tag`. |
 | `XRAY_DEFAULT_PROFILE` | No | `vless-reality` | The profile active on first start (a folder in `xray/`). After that, the super admin switches profiles on the **Profiles** page, and this value is no longer used. |
 | `XRAY_HOST` | Yes | Same as `MANAGEMENT_DOMAIN` | Public IP address or domain name of this server, used as the address in REALITY `vless://` links. Override with `--host` if your VPN traffic should route through a different address than the management UI. Must not be proxied by Cloudflare. |
 | `XRAY_REALITY_PRIVATE_KEY` | Yes | Auto-generated | Xray Reality private key in base64 format. Used by Xray internally during the TLS handshake. This value goes into `xray/vless-reality/config.json`. Keep it secret. |

@@ -77,13 +77,42 @@ cd quick-vless
 
 When run from the cloned directory, deployment files go into the `deployables/` subdirectory.
 
+### Installing from a branch
+
+To try a branch before it is merged, take `install.sh` from that branch **and** pass the same branch to `--branch`. Every deployment file (the manifest, `docker-compose.yaml`, the scripts and the profiles) is then downloaded from it:
+
+```bash
+BRANCH=my-feature
+curl -fsSL "https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/$BRANCH/install.sh" \
+  | sudo bash -s -- --domain manage.example.com --branch "$BRANCH"
+```
+
+`--branch` is needed because a script piped from `curl` can't tell which URL it came from. It is saved in `.env` as `INSTALL_BRANCH`, so later runs and `--upgrade` keep using that branch. Pass `--branch main` to go back.
+
+From a clone, check the branch out instead. The script detects it, so `--upgrade` downloads from the same branch:
+
+```bash
+git clone -b my-feature https://github.com/hamidmayeli/quick-vless.git
+cd quick-vless
+./install.sh --domain manage.example.com
+```
+
+The branch only decides the deployment files. The app runs from the `hamidmayeli/quick-vless` Docker image, which is `latest` (built from `main`) unless you pass `--image-tag`. If the branch changes the app, use the image built from it. A pull request build publishes `pr-<number>`:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/$BRANCH/install.sh" \
+  | sudo bash -s -- --domain manage.example.com --branch "$BRANCH" --image-tag pr-17
+```
+
+The script warns when the branch isn't `main` but the image is still `latest`. The tag is saved in `.env` as `APP_IMAGE_TAG`, and the daily `update.sh` keeps pulling that tag.
+
 ### What the script does
 
-1. Downloads the files listed in `manifest.txt` into the deploy directory: `docker-compose.yaml`, `Caddyfile`, `Dockerfile.caddy`, `update.sh`, `xray-run.sh`, and the profile folders in `xray/`. Skipped if the files are already present (see [Upgrading](upgrading.md) for `--upgrade`).
+1. Downloads the files listed in `manifest.txt` into the deploy directory, from `--branch` (default `main`): `docker-compose.yaml`, `Caddyfile`, `Dockerfile.caddy`, `update.sh`, `xray-run.sh`, and the profile folders in `xray/`. Skipped if the files are already present (see [Upgrading](upgrading.md) for `--upgrade`).
 2. Verifies Docker, Docker Compose, openssl, and curl are installed.
 3. Generates a JWT signing secret, an Xray Reality key pair, a short ID, and a random WebSocket path — all automatically.
 4. Writes a `.env` file in the deploy directory with all configuration (permissions 600).
-5. With `--cf-domain`, checks the Cloudflare Origin certificate and installs it into `xray/vless-cf-ws/tls/`.
+5. With `--cf-domain`, installs the Cloudflare Origin certificate into `xray/vless-cf-ws/tls/`, creating it through the Cloudflare API when you pass an API token.
 6. Fills in the `YOUR_*` placeholders in every profile's `config.json` and `client-config.template`.
 7. Pulls the Docker images.
 8. Starts all services with `docker compose up -d`.
@@ -210,16 +239,44 @@ You need two hostnames, not two registered domains. Two subdomains of one domain
 1. **DNS:** create the WebSocket hostname's A record and turn on **Proxied**.
 2. **SSL/TLS → Overview:** set the encryption mode to **Full (strict)**.
 3. **Network:** make sure **WebSockets** is on (it is by default).
-4. **SSL/TLS → Origin Server → Create Certificate:** keep the default hostnames (`example.com` and `*.example.com`), choose a validity of up to 15 years, and save the certificate and the private key as two files, e.g. `origin.pem` and `origin.key`. One certificate covers every first-level subdomain. Origin certificates are free, but only Cloudflare trusts them — which is all this profile needs, because clients only ever see Cloudflare's own certificate.
 
-### Install
+### The Origin certificate
+
+Cloudflare connects to your server over TLS, so the server needs a certificate for the WebSocket hostname. A Cloudflare **Origin CA** certificate is free and valid for up to 15 years. Only Cloudflare trusts it, which is all this profile needs: clients only ever see Cloudflare's own certificate.
+
+**Option A — let the script create it (recommended).** Create an API token, and the script asks Cloudflare for a certificate covering `--cf-domain`:
+
+1. In Cloudflare, open **My Profile → API Tokens → Create Token → Create Custom Token**.
+2. Add the permission **Zone → SSL and Certificates → Edit**.
+3. Under **Zone Resources**, choose **Include → Specific zone →** your domain.
+4. Create the token and copy it.
+
+```bash
+read -rsp 'Cloudflare API token: ' CF_API_TOKEN && export CF_API_TOKEN   # typed, not saved in history
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
+  | sudo --preserve-env=CF_API_TOKEN bash -s -- --domain manage.example.com --cf-domain cdn.example.com
+unset CF_API_TOKEN
+```
+
+How the token is handled:
+
+- **It is used once.** The script doesn't store it in `.env` or anywhere else, and passes it to `curl` through a temporary file so it doesn't appear in the process list.
+- **Prefer the `CF_API_TOKEN` environment variable** over `--cf-api-token TOKEN`, which would leave the token in your shell history.
+- **You can delete it afterwards** in the Cloudflare dashboard.
+
+How the certificate is made and reused:
+
+- **The private key never leaves the server.** It is generated on the server, and Cloudflare only receives a signing request.
+- **Re-runs reuse the installed certificate.** A new certificate is only requested when the installed one doesn't cover `--cf-domain`, or expires within 30 days.
+
+**Option B — create it yourself.** In Cloudflare, open **SSL/TLS → Origin Server → Create Certificate**. Keep the default hostnames (`example.com` and `*.example.com`; one certificate covers every first-level subdomain), choose a validity of up to 15 years, and save the certificate and the private key as two files:
 
 ```bash
 ./install.sh --domain manage.example.com --cf-domain cdn.example.com \
   --cf-origin-cert origin.pem --cf-origin-key origin.key
 ```
 
-This works on a new server and on an existing install (re-run with the same `--domain`). The script refuses a certificate that doesn't match its key or doesn't cover `--cf-domain`. Then open the **Profiles** page and activate `vless-cf-ws`.
+Either way, this works on a new server and on an existing install (re-run with the same `--domain`). The script refuses a certificate that doesn't match its key or doesn't cover `--cf-domain`. On an existing install, it restarts Xray when the certificate changes. Then open the **Profiles** page and activate `vless-cf-ws`.
 
 At the end, the script requests `https://cdn.example.com/` once and warns if something is off:
 

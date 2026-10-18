@@ -36,6 +36,9 @@ Non-interactive deployment script for easy-xray.
 Run directly without cloning:
   bash <(curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh) --domain manage.example.com
 
+Run from a branch (pass the same branch to --branch so every file comes from it):
+  bash <(curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/BRANCH/install.sh) --domain manage.example.com --branch BRANCH
+
 Required:
   --domain DOMAIN           Management UI domain (e.g. manage.example.com)
 
@@ -47,9 +50,20 @@ Optional:
                             switches profiles on the Profiles page.
   --cf-domain DOMAIN        Hostname proxied by Cloudflare for the vless-cf-ws
                             profile (e.g. cdn.example.com, one level deep)
-  --cf-origin-cert FILE     Cloudflare Origin CA certificate (PEM) covering
-                            --cf-domain. Needed the first time with --cf-domain
+  --cf-api-token TOKEN      Cloudflare API token with the permission
+                            Zone → SSL and Certificates → Edit. Creates the
+                            Origin CA certificate for --cf-domain (15 years).
+                            Used once, never stored. Prefer the CF_API_TOKEN
+                            environment variable to keep it out of shell history
+  --cf-origin-cert FILE     Or: an existing Cloudflare Origin CA certificate (PEM)
+                            covering --cf-domain
   --cf-origin-key FILE      Private key (PEM) of that certificate
+  --branch NAME             Git branch to download every deployment file from
+                            (default: the branch checked out in a clone, else
+                            the branch of the last install, else main)
+  --image-tag TAG           Tag of the hamidmayeli/quick-vless app image
+                            (default: latest, built from main). E.g. pr-17
+                            for the image a pull request build published
   --jwt-secret SECRET       JWT signing secret
                             (default: openssl rand -hex 32)
   --xray-private-key KEY    Xray Reality private key (pair with --xray-public-key)
@@ -79,11 +93,12 @@ Steps (in execution order; * = runs every time):
   check_prerequisites       Verify docker, docker compose (V2), openssl, curl
   generate_secrets        * Fill in any missing secrets/keys
   write_env_file          * Write \$DEPLOY_DIR/.env (chmod 600)
-  install_cf_certificate  * With --cf-domain: check and install the Origin
-                            certificate into xray/vless-cf-ws/tls/
+  install_cf_certificate  * With --cf-domain: install (or, with an API token,
+                            create) the Origin certificate in xray/vless-cf-ws/tls/
   write_xray_profiles     * Fill in the YOUR_* placeholders of every profile
   pull_images               docker compose pull
-  start_services            docker compose up -d
+  start_services            docker compose up -d (and restart Xray if its
+                            certificate changed)
   setup_cron_jobs           Install crontab entry: update.sh daily at 3:00 AM
   verify_health             Poll http://localhost until ready (warn on timeout)
   verify_cloudflare       * With --cf-domain: check the hostname is proxied by
@@ -112,7 +127,10 @@ PARAM_PROFILE=""
 PARAM_CF_DOMAIN=""
 PARAM_CF_ORIGIN_CERT=""
 PARAM_CF_ORIGIN_KEY=""
+PARAM_CF_API_TOKEN="${CF_API_TOKEN:-}"
 PARAM_WS_ID=""
+PARAM_BRANCH=""
+PARAM_IMAGE_TAG=""
 PARAM_DEPLOY_DIR=""
 PARAM_SKIP_PULL=false
 PARAM_UPGRADE=false
@@ -148,6 +166,12 @@ while [[ $# -gt 0 ]]; do
     --cf-origin-cert)   PARAM_CF_ORIGIN_CERT="${2:-}";     shift 2 ;;
     --cf-origin-key=*)  PARAM_CF_ORIGIN_KEY="${1#*=}";     shift ;;
     --cf-origin-key)    PARAM_CF_ORIGIN_KEY="${2:-}";      shift 2 ;;
+    --cf-api-token=*)   PARAM_CF_API_TOKEN="${1#*=}";      shift ;;
+    --cf-api-token)     PARAM_CF_API_TOKEN="${2:-}";       shift 2 ;;
+    --branch=*)         PARAM_BRANCH="${1#*=}";            shift ;;
+    --branch)           PARAM_BRANCH="${2:-}";             shift 2 ;;
+    --image-tag=*)      PARAM_IMAGE_TAG="${1#*=}";         shift ;;
+    --image-tag)        PARAM_IMAGE_TAG="${2:-}";          shift 2 ;;
     --deploy-dir=*)     PARAM_DEPLOY_DIR="${1#*=}";        shift ;;
     --deploy-dir)       PARAM_DEPLOY_DIR="${2:-}";         shift 2 ;;
     --skip-pull)        PARAM_SKIP_PULL=true;              shift ;;
@@ -172,10 +196,21 @@ fi
 if [[ -n "$PARAM_XRAY_PUBLIC_KEY" && -z "$PARAM_XRAY_PRIVATE_KEY" ]]; then
   die "--xray-public-key requires --xray-private-key to be supplied as well."
 fi
+if [[ -n "$PARAM_CF_DOMAIN" && ! "$PARAM_CF_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+  die "--cf-domain must be a hostname such as cdn.example.com."
+fi
+if [[ -n "$PARAM_CF_API_TOKEN" && -n "$PARAM_CF_ORIGIN_CERT" ]]; then
+  die "Use either --cf-api-token or --cf-origin-cert/--cf-origin-key, not both."
+fi
+if [[ -n "$PARAM_BRANCH" && ! "$PARAM_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  die "--branch must be a branch name (letters, digits, . _ / -)."
+fi
+if [[ -n "$PARAM_IMAGE_TAG" && ! "$PARAM_IMAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  die "--image-tag must be an image tag (letters, digits, . _ -)."
+fi
 if [[ -n "$PARAM_CF_ORIGIN_CERT" || -n "$PARAM_CF_ORIGIN_KEY" ]]; then
   [[ -n "$PARAM_CF_ORIGIN_CERT" && -n "$PARAM_CF_ORIGIN_KEY" ]] \
     || die "--cf-origin-cert and --cf-origin-key must be supplied together."
-  [[ -n "$PARAM_CF_DOMAIN" ]] || die "--cf-origin-cert/--cf-origin-key require --cf-domain."
   # Resolve now: later steps run from other directories.
   [[ -f "$PARAM_CF_ORIGIN_CERT" ]] || die "Certificate file not found: $PARAM_CF_ORIGIN_CERT"
   [[ -f "$PARAM_CF_ORIGIN_KEY"  ]] || die "Key file not found: $PARAM_CF_ORIGIN_KEY"
@@ -238,6 +273,8 @@ load_env_if_present() {
   [[ -z "$PARAM_PROFILE"           ]] && PARAM_PROFILE="$(_env_val XRAY_DEFAULT_PROFILE)"
   [[ -z "$PARAM_CF_DOMAIN"         ]] && PARAM_CF_DOMAIN="$(_env_val XRAY_CF_DOMAIN)"
   [[ -z "$PARAM_WS_ID"             ]] && PARAM_WS_ID="$(_env_val XRAY_WS_ID)"
+  [[ -z "$PARAM_BRANCH"            ]] && PARAM_BRANCH="$(_env_val INSTALL_BRANCH)"
+  [[ -z "$PARAM_IMAGE_TAG"         ]] && PARAM_IMAGE_TAG="$(_env_val APP_IMAGE_TAG)"
   # SNI and fingerprint: only load if they haven't been overridden and the file has them
   local _sni; _sni="$(_env_val XRAY_SNI)"
   local _fp;  _fp="$(_env_val XRAY_FINGERPRINT)"
@@ -245,7 +282,35 @@ load_env_if_present() {
   [[ -z "$_fp"  ]] || PARAM_XRAY_FINGERPRINT="$_fp"
 }
 
+# In a clone, the checked-out branch is where the local files came from, so it wins over .env.
+if [[ -z "$PARAM_BRANCH" && -n "$SCRIPT_DIR" ]] && command -v git &>/dev/null; then
+  PARAM_BRANCH="$(git -c safe.directory="$SCRIPT_DIR" -C "$SCRIPT_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+fi
+
 load_env_if_present
+
+# A re-run may take the Cloudflare hostname from .env, so check this only now.
+if [[ -z "$PARAM_CF_DOMAIN" ]]; then
+  [[ -z "$PARAM_CF_API_TOKEN"   ]] || die "--cf-api-token (or CF_API_TOKEN) requires --cf-domain."
+  [[ -z "$PARAM_CF_ORIGIN_CERT" ]] || die "--cf-origin-cert/--cf-origin-key require --cf-domain."
+fi
+
+# ------------------------------------------------------------
+# Branch and image every file and container come from
+# ------------------------------------------------------------
+[[ -n "$PARAM_BRANCH"    ]] || PARAM_BRANCH="main"
+[[ -n "$PARAM_IMAGE_TAG" ]] || PARAM_IMAGE_TAG="latest"
+
+# EASY_XRAY_RAW_ROOT overrides where branches are read from, e.g. file:///path/to/branches when testing.
+RAW_ROOT="${EASY_XRAY_RAW_ROOT:-https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads}"
+GITHUB_RAW="$RAW_ROOT/$PARAM_BRANCH/deployables"
+
+info "Branch     : $PARAM_BRANCH"
+info "App image  : hamidmayeli/quick-vless:$PARAM_IMAGE_TAG"
+if [[ "$PARAM_BRANCH" != "main" && "$PARAM_IMAGE_TAG" == "latest" ]]; then
+  warn "Deployment files come from branch '$PARAM_BRANCH', but the app image is 'latest' (built from main)."
+  warn "  If the branch changes the app, pass --image-tag with the image built from it (e.g. pr-17)."
+fi
 
 # ------------------------------------------------------------
 # State helpers
@@ -292,12 +357,9 @@ run_step() {
 # ------------------------------------------------------------
 # 1. download_files
 # ------------------------------------------------------------
-# EASY_XRAY_RAW_BASE overrides the source, e.g. file:///path/to/deployables when testing.
-GITHUB_RAW="${EASY_XRAY_RAW_BASE:-https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/deployables}"
-
 download() {
   curl -fsSL --max-time 30 "$GITHUB_RAW/$1" -o "$2" \
-    || die "Failed to download $1 from $GITHUB_RAW/$1"
+    || die "Failed to download $1 from $GITHUB_RAW/$1 — does branch '$PARAM_BRANCH' exist?"
 }
 
 step_download_files() {
@@ -567,6 +629,8 @@ XRAY_FINGERPRINT=${PARAM_XRAY_FINGERPRINT}
 XRAY_DEFAULT_PROFILE=${PARAM_PROFILE}
 XRAY_CF_DOMAIN=${PARAM_CF_DOMAIN}
 XRAY_WS_ID=${PARAM_WS_ID}
+INSTALL_BRANCH=${PARAM_BRANCH}
+APP_IMAGE_TAG=${PARAM_IMAGE_TAG}
 EOF
 
   chmod 600 "$env_file"
@@ -591,25 +655,100 @@ san_covers() {
   return 1
 }
 
-# check_certificate CERT KEY HOST — dies unless CERT/KEY are a matching PEM pair covering HOST.
-check_certificate() {
+# certificate_problem CERT KEY HOST — prints why CERT/KEY can't serve HOST, and fails; silent if they can.
+certificate_problem() {
   local cert="$1" key="$2" host="$3"
 
-  openssl x509 -in "$cert" -noout 2>/dev/null || die "$cert is not a PEM certificate."
-  openssl pkey -in "$key" -noout 2>/dev/null  || die "$key is not a PEM private key."
+  if ! openssl x509 -in "$cert" -noout 2>/dev/null; then echo "$cert is not a PEM certificate."; return 1; fi
+  if ! openssl pkey -in "$key" -noout 2>/dev/null;  then echo "$key is not a PEM private key."; return 1; fi
 
   local cert_pub key_pub
   cert_pub="$(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null)"
   key_pub="$(openssl pkey -in "$key" -pubout 2>/dev/null)"
-  [[ -n "$cert_pub" && "$cert_pub" == "$key_pub" ]] || die "The private key $key does not belong to the certificate $cert."
+  if [[ -z "$cert_pub" || "$cert_pub" != "$key_pub" ]]; then
+    echo "The private key $key does not belong to the certificate $cert."
+    return 1
+  fi
 
   local sans
   sans="$(openssl x509 -in "$cert" -noout -ext subjectAltName 2>/dev/null \
     | grep -o 'DNS:[^,]*' | cut -d: -f2 | tr -d ' ' | tr '\n' ' ' || true)"
-  san_covers "$host" "$sans" \
-    || die "The certificate does not cover $host (it covers: ${sans:-nothing}). Note that *.example.com covers cdn.example.com but not a.b.example.com."
+  if ! san_covers "$host" "$sans"; then
+    echo "The certificate does not cover $host (it covers: ${sans:-nothing}). Note that *.example.com covers cdn.example.com but not a.b.example.com."
+    return 1
+  fi
+}
 
-  info "  Certificate covers $host and expires $(openssl x509 -in "$cert" -noout -enddate | cut -d= -f2)."
+# check_certificate CERT KEY HOST — dies unless CERT/KEY are a matching PEM pair covering HOST.
+check_certificate() {
+  local problem
+  problem="$(certificate_problem "$1" "$2" "$3")" || die "$problem"
+  info "  Certificate covers $3 and expires $(cert_end_date "$1")."
+}
+
+cert_end_date() { openssl x509 -in "$1" -noout -enddate | cut -d= -f2; }
+
+# True when CERT expires within 30 days.
+cert_expires_soon() { ! openssl x509 -in "$1" -noout -checkend 2592000 >/dev/null 2>&1; }
+
+# install_pem_pair CERT KEY DEST_CERT DEST_KEY — copies the pair into place; notes whether it changed.
+install_pem_pair() {
+  local src_cert="$1" src_key="$2" cert="$3" key="$4"
+  mkdir -p "$(dirname "$cert")"
+  if ! cmp -s "$src_cert" "$cert" 2>/dev/null || ! cmp -s "$src_key" "$key" 2>/dev/null; then
+    CF_CERT_CHANGED=true
+  fi
+  if [[ "$src_cert" != "$cert" ]]; then cp "$src_cert" "$cert"; fi
+  if [[ "$src_key"  != "$key"  ]]; then cp "$src_key"  "$key";  fi
+  chmod 644 "$cert"
+  chmod 600 "$key"
+}
+
+# EASY_XRAY_CF_API overrides the Cloudflare API, for testing.
+CF_API="${EASY_XRAY_CF_API:-https://api.cloudflare.com/client/v4}"
+
+# create_origin_certificate CERT KEY — asks Cloudflare's Origin CA for a 15-year certificate
+# covering --cf-domain. The private key is generated here and never leaves the server:
+# Cloudflare only receives a certificate signing request.
+create_origin_certificate() {
+  local cert="$1" key="$2" work response pem reasons
+  work="$(mktemp -d)"
+  chmod 700 "$work"
+
+  if ! openssl req -new -newkey rsa:2048 -nodes -keyout "$work/privkey.pem" \
+      -out "$work/request.csr" -subj "/CN=$PARAM_CF_DOMAIN" 2>/dev/null; then
+    rm -rf "$work"
+    die "openssl could not create a certificate signing request."
+  fi
+
+  printf '{"hostnames":["%s"],"requested_validity":5475,"request_type":"origin-rsa","csr":"%s"}' \
+    "$PARAM_CF_DOMAIN" "$(awk '{ printf "%s\\n", $0 }' "$work/request.csr")" > "$work/request.json"
+  # The header is read from a file so the token never shows up in the process list.
+  printf 'Authorization: Bearer %s\n' "$PARAM_CF_API_TOKEN" > "$work/auth.header"
+
+  info "  Asking Cloudflare to create an Origin certificate for $PARAM_CF_DOMAIN ..."
+  if ! response="$(curl -sS --max-time 30 -X POST "$CF_API/certificates" \
+      -H @"$work/auth.header" -H "Content-Type: application/json" \
+      --data-binary @"$work/request.json" 2>&1)"; then
+    rm -rf "$work"
+    die "Could not reach the Cloudflare API: $response"
+  fi
+  rm -f "$work/auth.header"
+
+  # The PEM comes back as one JSON string with \n escapes (and possibly \/).
+  response="$(tr -d '\r\n' <<<"$response")"
+  pem="$(sed -n 's/.*"certificate" *: *"\([^"]*\)".*/\1/p' <<<"$response" | sed 's#\\/#/#g')"
+  if ! grep -q '"success" *: *true' <<<"$response" || [[ -z "$pem" ]]; then
+    reasons="$(grep -o '"message" *: *"[^"]*"' <<<"$response" | cut -d'"' -f4 | tr '\n' ';' | sed 's/;$//; s/;/; /g' || true)"
+    rm -rf "$work"
+    die "Cloudflare did not create the certificate: ${reasons:-unexpected response}. The token needs the permission Zone → SSL and Certificates → Edit on the zone of $PARAM_CF_DOMAIN."
+  fi
+  printf '%b' "$pem" > "$work/fullchain.pem"
+
+  check_certificate "$work/fullchain.pem" "$work/privkey.pem" "$PARAM_CF_DOMAIN"
+  install_pem_pair "$work/fullchain.pem" "$work/privkey.pem" "$cert" "$key"
+  rm -rf "$work"
+  info "Origin certificate created by Cloudflare and installed in xray/vless-cf-ws/tls/."
 }
 
 step_install_cf_certificate() {
@@ -628,20 +767,31 @@ step_install_cf_certificate() {
   local tls_dir="$DEPLOY_DIR/xray/vless-cf-ws/tls"
   local cert="$tls_dir/fullchain.pem"
   local key="$tls_dir/privkey.pem"
+  local problem=""
 
   if [[ -n "$PARAM_CF_ORIGIN_CERT" ]]; then
     check_certificate "$PARAM_CF_ORIGIN_CERT" "$PARAM_CF_ORIGIN_KEY" "$PARAM_CF_DOMAIN"
-    mkdir -p "$tls_dir"
-    if [[ "$PARAM_CF_ORIGIN_CERT" != "$cert" ]]; then cp "$PARAM_CF_ORIGIN_CERT" "$cert"; fi
-    if [[ "$PARAM_CF_ORIGIN_KEY"  != "$key"  ]]; then cp "$PARAM_CF_ORIGIN_KEY"  "$key";  fi
-    chmod 644 "$cert"
-    chmod 600 "$key"
+    install_pem_pair "$PARAM_CF_ORIGIN_CERT" "$PARAM_CF_ORIGIN_KEY" "$cert" "$key"
     info "Origin certificate installed in xray/vless-cf-ws/tls/."
-  elif [[ -f "$cert" && -f "$key" ]]; then
-    check_certificate "$cert" "$key" "$PARAM_CF_DOMAIN"
-    info "Using the Origin certificate already in xray/vless-cf-ws/tls/."
+  elif [[ -f "$cert" && -f "$key" ]] && problem="$(certificate_problem "$cert" "$key" "$PARAM_CF_DOMAIN")"; then
+    # A usable certificate is already installed: don't ask Cloudflare for another one on every run.
+    if cert_expires_soon "$cert" && [[ -n "$PARAM_CF_API_TOKEN" ]]; then
+      info "The Origin certificate expires on $(cert_end_date "$cert") — replacing it."
+      create_origin_certificate "$cert" "$key"
+    else
+      if cert_expires_soon "$cert"; then
+        warn "The Origin certificate in xray/vless-cf-ws/tls/ expires on $(cert_end_date "$cert")."
+        warn "  Re-run with --cf-api-token (or CF_API_TOKEN) to replace it."
+      fi
+      info "Using the Origin certificate already in xray/vless-cf-ws/tls/ (expires $(cert_end_date "$cert"))."
+    fi
+  elif [[ -n "$PARAM_CF_API_TOKEN" ]]; then
+    [[ -z "$problem" ]] || info "The installed certificate can't be used: $problem"
+    create_origin_certificate "$cert" "$key"
+  elif [[ -n "$problem" ]]; then
+    die "$problem Pass --cf-api-token to create a new certificate, or --cf-origin-cert and --cf-origin-key."
   else
-    die "--cf-domain needs --cf-origin-cert and --cf-origin-key the first time. Create them in Cloudflare: SSL/TLS → Origin Server → Create Certificate."
+    die "--cf-domain needs a certificate the first time: pass --cf-api-token (or set CF_API_TOKEN) to have Cloudflare create one, or --cf-origin-cert and --cf-origin-key with one you created in Cloudflare (SSL/TLS → Origin Server)."
   fi
 }
 
@@ -719,6 +869,18 @@ step_start_services() {
   (cd "$DEPLOY_DIR" && docker compose up -d) \
     || die "docker compose up failed."
   info "Services started."
+}
+
+# Xray reads certificates only when it starts, and replacing one doesn't change its config's
+# structure, so the app won't restart it. Do it here when an already running install got a new one.
+step_reload_xray() {
+  # A container started by this run already loaded the new certificate.
+  if [[ "$CF_CERT_CHANGED" != true || "$XRAY_WAS_RUNNING" != true ]]; then
+    return 0
+  fi
+  info "The Origin certificate changed — restarting Xray to load it ..."
+  (cd "$DEPLOY_DIR" && docker compose restart xray) \
+    || warn "Could not restart Xray. Run 'docker compose restart xray' in $DEPLOY_DIR."
 }
 
 # ------------------------------------------------------------
@@ -830,6 +992,9 @@ log "============================================================"
 UPGRADE_MODE=""
 [[ "$PARAM_UPGRADE" == true ]] && UPGRADE_MODE="always"
 
+CF_CERT_CHANGED=false
+XRAY_WAS_RUNNING=false
+
 run_step "download_files"          step_download_files          "$UPGRADE_MODE"
 run_step "migrate_legacy_layout"   step_migrate_legacy_layout   always
 run_step "install_prerequisites"   step_install_prerequisites
@@ -839,7 +1004,12 @@ run_step "write_env_file"          step_write_env_file          always
 run_step "install_cf_certificate"  step_install_cf_certificate  always
 run_step "write_xray_profiles"     step_write_xray_profiles     always
 run_step "pull_images"             step_pull_images             "$UPGRADE_MODE"
+if command -v docker &>/dev/null \
+    && [[ -n "$(cd "$DEPLOY_DIR" && docker compose ps -q --status running xray 2>/dev/null || true)" ]]; then
+  XRAY_WAS_RUNNING=true
+fi
 run_step "start_services"          step_start_services          "$UPGRADE_MODE"
+run_step "reload_xray"             step_reload_xray             always
 run_step "setup_cron_jobs"         step_setup_cron_jobs
 run_step "verify_health"           step_verify_health
 run_step "verify_cloudflare"       step_verify_cloudflare       always
@@ -853,5 +1023,8 @@ echo "  Active profile on first start: ${PARAM_PROFILE} (switch it on the Profil
 if [[ -n "$PARAM_CF_DOMAIN" ]]; then
   echo "  Cloudflare WebSocket profile: vless-cf-ws on ${PARAM_CF_DOMAIN}"
 fi
-echo "  Documentation: https://github.com/hamidmayeli/quick-vless/blob/main/docs/hosting.md"
+if [[ "$PARAM_BRANCH" != "main" || "$PARAM_IMAGE_TAG" != "latest" ]]; then
+  echo "  Installed from branch ${PARAM_BRANCH} with app image tag ${PARAM_IMAGE_TAG}"
+fi
+echo "  Documentation: https://github.com/hamidmayeli/quick-vless/blob/${PARAM_BRANCH}/docs/hosting.md"
 echo "============================================================"
