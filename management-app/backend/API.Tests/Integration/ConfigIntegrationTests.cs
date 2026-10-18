@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -13,7 +12,7 @@ public sealed class ConfigIntegrationTests : IDisposable
 
     public ConfigIntegrationTests()
     {
-        _client = _factory.CreateClient();
+        _client = TestAuth.CreateSuperAdminClientAsync(_factory).GetAwaiter().GetResult();
         Setup().GetAwaiter().GetResult();
     }
 
@@ -21,12 +20,6 @@ public sealed class ConfigIntegrationTests : IDisposable
 
     private async Task Setup()
     {
-        var loginRes = await _client.PostAsJsonAsync("/api/v1/auth/login",
-            new { username = "admin", password = "pass" });
-        var tokens = await loginRes.Content.ReadFromJsonAsync<JsonElement>();
-        _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", tokens.GetProperty("access_token").GetString()!);
-
         var userRes = await _client.PostAsJsonAsync("/api/v1/users", new
         {
             name = "ConfigUser",

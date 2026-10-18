@@ -5,6 +5,9 @@ export default defineConfig({
   globalSetup: './global-setup',
   timeout: 30_000,
   retries: process.env.CI ? 2 : 0,
+  // All specs share one stateful backend (users.spec wipes every user), so run them one at a time.
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:8080',
     headless: true,

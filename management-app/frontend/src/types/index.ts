@@ -6,10 +6,21 @@ export interface User {
   expiry: string | null
   single_connection: boolean
   enabled: boolean
+  created_by?: string | null
+}
+
+export type AdminRole = 'super_admin' | 'admin'
+
+export interface Session {
+  username: string
+  role: AdminRole
 }
 
 export interface Admin {
   username: string
+  role: AdminRole
+  status: 'pending' | 'active'
+  user_count: number
 }
 
 export interface AuthTokens {

@@ -38,9 +38,10 @@ cd easy-xray
 
 # 3. Open the management UI
 #    https://manage.example.com
-#    Enter any username and password — the first login creates the admin account
+#    Enter any username and password — the first login creates the super admin account
 
 # 4. Add users on the Users page, then click "Copy Config URL" next to each user
+#    (Optional) Add more admins on the Admins page — each admin only sees their own users
 
 # 5. Share the config URL with each VPN user
 #    They open it in their VLESS client or scan the QR code on the Config page
