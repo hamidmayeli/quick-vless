@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags:
       - 'v*'
+  pull_request:
 
 jobs:
   publish:
@@ -27,6 +28,7 @@ jobs:
           images: hamidmayeli/quick-vless
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
