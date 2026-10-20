@@ -1,0 +1,1 @@
+vless://{{secret}}@cdn.e2e.test:443?encryption=none&security=none&type=ws&host=cdn.e2e.test&path=%2Fws-e2e#{{name}}

@@ -1,0 +1,1 @@
+vless://{{secret}}@YOUR_HOST:443?type=tcp&security=reality&pbk=YOUR_PUBLIC_KEY&fp=YOUR_FINGERPRINT&sni=YOUR_SNI&sid=YOUR_SHORT_ID&spx=%2F&flow=xtls-rprx-vision#{{name}}

@@ -25,7 +25,7 @@ RUN --mount=type=cache,id=quick-vless-pnpm,target=/root/.local/share/pnpm/store 
 COPY frontend/ ./
 RUN pnpm build
 
-# ── Stage 3: Xray CLI source (for gRPC client binary in the app container) ────
+# ── Stage 3: Xray binary — the app checks generated configs with `xray run -test` ──
 FROM teddysun/xray AS xray-src
 
 # ── Stage 4: Runtime ──────────────────────────────────────────────────────────
@@ -34,6 +34,9 @@ WORKDIR /app
 COPY --from=backend-build /publish       ./
 COPY --from=frontend-build /app/dist     ./wwwroot
 COPY --from=xray-src /usr/bin/xray       /usr/bin/xray
+# geoip.dat / geosite.dat: without them `xray run -test` rejects rules like geosite:category-ads-all
+COPY --from=xray-src /usr/share/xray     /usr/share/xray
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
+ENV XRAY_LOCATION_ASSET=/usr/share/xray
 ENTRYPOINT ["dotnet", "API.dll"]

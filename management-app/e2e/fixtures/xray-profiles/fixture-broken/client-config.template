@@ -1,0 +1,1 @@
+vless://{{secret}}@vpn.e2e.test:443?type=tcp&security=reality&pbk=e2e-public-key&fp=chrome&sni=dl.google.com&sid=a1b2c3d4&spx=%2F&flow=xtls-rprx-vision#{{name}}

@@ -23,6 +23,31 @@ export interface Admin {
   user_count: number
 }
 
+export interface XrayInbound {
+  tag: string
+  network: string
+  security: string
+  port: string | null
+  flow: string
+}
+
+export interface XrayProfile {
+  name: string
+  active: boolean
+  valid: boolean
+  errors: string[]
+  inbounds: XrayInbound[]
+}
+
+export interface XrayProfilesState {
+  mode: 'profiles' | 'legacy'
+  active: string | null
+  /** Whether Xray runs the generated config; null when the server can't tell. */
+  applied: boolean | null
+  last_error: string | null
+  profiles: XrayProfile[]
+}
+
 export interface AuthTokens {
   access_token: string
 }

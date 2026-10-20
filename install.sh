@@ -34,14 +34,37 @@ Usage: $(basename "$0") [OPTIONS]
 Non-interactive deployment script for easy-xray.
 
 Run directly without cloning:
-  bash <(curl -fsSL https://raw.githubusercontent.com/hamidmayeli/outline-ss-ws/refs/heads/main/install.sh) --domain manage.example.com
+  bash <(curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh) --domain manage.example.com
+
+Run from a branch (pass the same branch to --branch so every file comes from it):
+  bash <(curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/BRANCH/install.sh) --domain manage.example.com --branch BRANCH
 
 Required:
   --domain DOMAIN           Management UI domain (e.g. manage.example.com)
 
 Optional:
-  --host HOST               Server IP/domain in vless:// URLs
+  --host HOST               Server IP/domain in REALITY vless:// URLs
                             (default: same as --domain)
+  --profile NAME            Xray profile active on first start: a folder in xray/
+                            (default: vless-reality). Later, the super admin
+                            switches profiles on the Profiles page.
+  --cf-domain DOMAIN        Hostname proxied by Cloudflare for the Cloudflare
+                            profiles, vless-cf-xhttp and vless-cf-ws
+                            (e.g. cdn.example.com, one level deep)
+  --cf-api-token TOKEN      Cloudflare API token with the permission
+                            Zone → SSL and Certificates → Edit. Creates the
+                            Origin CA certificate for --cf-domain (15 years).
+                            Used once, never stored. Prefer the CF_API_TOKEN
+                            environment variable to keep it out of shell history
+  --cf-origin-cert FILE     Or: an existing Cloudflare Origin CA certificate (PEM)
+                            covering --cf-domain
+  --cf-origin-key FILE      Private key (PEM) of that certificate
+  --branch NAME             Git branch to download every deployment file from
+                            (default: the branch checked out in a clone, else
+                            the branch of the last install, else main)
+  --image-tag TAG           Tag of the hamidmayeli/quick-vless app image
+                            (default: latest, built from main). E.g. pr-17
+                            for the image a pull request build published
   --jwt-secret SECRET       JWT signing secret
                             (default: openssl rand -hex 32)
   --xray-private-key KEY    Xray Reality private key (pair with --xray-public-key)
@@ -56,28 +79,38 @@ Optional:
                             (default: \$SCRIPT_DIR/deployables if it exists,
                              \$SCRIPT_DIR if cloned, or \$PWD/easy-xray otherwise)
   --skip-pull               Skip 'docker compose pull'
+  --upgrade                 Refresh the deployment files of an existing install
+                            (keeps .bak copies; never overwrites profile files),
+                            migrate an old xray/config.json, then pull and restart
   --force STEP              Force a specific step to re-run even if already done
   --reset                   Clear the state file and start fresh
   -h, --help                Print this message and exit
 
-Steps (in execution order):
-  download_files            Download docker-compose.yaml, Caddyfile,
-                            Dockerfile.caddy, xray/config.json, update.sh
+Steps (in execution order; * = runs every time):
+  download_files            Download the files listed in manifest.txt
+  migrate_legacy_layout   * Move an old xray/config.json to xray/vless-reality/
   install_prerequisites     Install Docker Engine + openssl + curl via apt
                             (no-op on non-apt systems)
   check_prerequisites       Verify docker, docker compose (V2), openssl, curl
-  generate_secrets          Fill in any missing secrets/keys
-  write_env_file            Write \$DEPLOY_DIR/.env (chmod 600)
-  write_xray_config         Patch xray/config.json with actual key and short ID
+  generate_secrets        * Fill in any missing secrets/keys
+  write_env_file          * Write \$DEPLOY_DIR/.env (chmod 600)
+  install_cf_certificate  * With --cf-domain: install (or, with an API token,
+                            create) the Origin certificate in the tls/ folder of
+                            every Cloudflare profile
+  write_xray_profiles     * Fill in the YOUR_* placeholders of every profile
   pull_images               docker compose pull
-  start_services            docker compose up -d
+  start_services            docker compose up -d (and restart Xray if its
+                            certificate changed)
   setup_cron_jobs           Install crontab entry: update.sh daily at 3:00 AM
   verify_health             Poll http://localhost until ready (warn on timeout)
+  verify_cloudflare       * With --cf-domain: check the hostname is proxied by
+                            Cloudflare (warns only)
 
 State file: \$DEPLOY_DIR/.install-state
   Completed step names are recorded one per line. Re-running the script
-  skips steps already recorded. Use --force STEP to re-run one step, or
-  --reset to clear all state and start over.
+  skips steps already recorded (except the * steps, which only fill in what
+  is missing). Use --force STEP to re-run one step, or --reset to clear all
+  state and start over.
 EOF
 }
 
@@ -92,8 +125,20 @@ PARAM_XRAY_PUBLIC_KEY=""
 PARAM_XRAY_SHORT_ID=""
 PARAM_XRAY_SNI="dl.google.com"
 PARAM_XRAY_FINGERPRINT="chrome"
+PARAM_PROFILE=""
+PARAM_CF_DOMAIN=""
+PARAM_CF_ORIGIN_CERT=""
+PARAM_CF_ORIGIN_KEY=""
+PARAM_CF_API_TOKEN="${CF_API_TOKEN:-}"
+PARAM_WS_ID=""
+PARAM_XHTTP_ID=""
+PARAM_VLESS_ENC_PRIVATE_KEY=""
+PARAM_VLESS_ENC_PUBLIC_KEY=""
+PARAM_BRANCH=""
+PARAM_IMAGE_TAG=""
 PARAM_DEPLOY_DIR=""
 PARAM_SKIP_PULL=false
+PARAM_UPGRADE=false
 PARAM_FORCE_STEP=""
 PARAM_RESET=false
 
@@ -118,9 +163,24 @@ while [[ $# -gt 0 ]]; do
     --xray-sni)         PARAM_XRAY_SNI="${2:-}";           shift 2 ;;
     --xray-fingerprint=*) PARAM_XRAY_FINGERPRINT="${1#*=}"; shift ;;
     --xray-fingerprint)   PARAM_XRAY_FINGERPRINT="${2:-}";  shift 2 ;;
+    --profile=*)        PARAM_PROFILE="${1#*=}";           shift ;;
+    --profile)          PARAM_PROFILE="${2:-}";            shift 2 ;;
+    --cf-domain=*)      PARAM_CF_DOMAIN="${1#*=}";         shift ;;
+    --cf-domain)        PARAM_CF_DOMAIN="${2:-}";          shift 2 ;;
+    --cf-origin-cert=*) PARAM_CF_ORIGIN_CERT="${1#*=}";    shift ;;
+    --cf-origin-cert)   PARAM_CF_ORIGIN_CERT="${2:-}";     shift 2 ;;
+    --cf-origin-key=*)  PARAM_CF_ORIGIN_KEY="${1#*=}";     shift ;;
+    --cf-origin-key)    PARAM_CF_ORIGIN_KEY="${2:-}";      shift 2 ;;
+    --cf-api-token=*)   PARAM_CF_API_TOKEN="${1#*=}";      shift ;;
+    --cf-api-token)     PARAM_CF_API_TOKEN="${2:-}";       shift 2 ;;
+    --branch=*)         PARAM_BRANCH="${1#*=}";            shift ;;
+    --branch)           PARAM_BRANCH="${2:-}";             shift 2 ;;
+    --image-tag=*)      PARAM_IMAGE_TAG="${1#*=}";         shift ;;
+    --image-tag)        PARAM_IMAGE_TAG="${2:-}";          shift 2 ;;
     --deploy-dir=*)     PARAM_DEPLOY_DIR="${1#*=}";        shift ;;
     --deploy-dir)       PARAM_DEPLOY_DIR="${2:-}";         shift 2 ;;
     --skip-pull)        PARAM_SKIP_PULL=true;              shift ;;
+    --upgrade)          PARAM_UPGRADE=true;                shift ;;
     --force=*)          PARAM_FORCE_STEP="${1#*=}";        shift ;;
     --force)            PARAM_FORCE_STEP="${2:-}";         shift 2 ;;
     --reset)            PARAM_RESET=true;                  shift ;;
@@ -140,6 +200,27 @@ if [[ -n "$PARAM_XRAY_PRIVATE_KEY" && -z "$PARAM_XRAY_PUBLIC_KEY" ]]; then
 fi
 if [[ -n "$PARAM_XRAY_PUBLIC_KEY" && -z "$PARAM_XRAY_PRIVATE_KEY" ]]; then
   die "--xray-public-key requires --xray-private-key to be supplied as well."
+fi
+if [[ -n "$PARAM_CF_DOMAIN" && ! "$PARAM_CF_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+  die "--cf-domain must be a hostname such as cdn.example.com."
+fi
+if [[ -n "$PARAM_CF_API_TOKEN" && -n "$PARAM_CF_ORIGIN_CERT" ]]; then
+  die "Use either --cf-api-token or --cf-origin-cert/--cf-origin-key, not both."
+fi
+if [[ -n "$PARAM_BRANCH" && ! "$PARAM_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  die "--branch must be a branch name (letters, digits, . _ / -)."
+fi
+if [[ -n "$PARAM_IMAGE_TAG" && ! "$PARAM_IMAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  die "--image-tag must be an image tag (letters, digits, . _ -)."
+fi
+if [[ -n "$PARAM_CF_ORIGIN_CERT" || -n "$PARAM_CF_ORIGIN_KEY" ]]; then
+  [[ -n "$PARAM_CF_ORIGIN_CERT" && -n "$PARAM_CF_ORIGIN_KEY" ]] \
+    || die "--cf-origin-cert and --cf-origin-key must be supplied together."
+  # Resolve now: later steps run from other directories.
+  [[ -f "$PARAM_CF_ORIGIN_CERT" ]] || die "Certificate file not found: $PARAM_CF_ORIGIN_CERT"
+  [[ -f "$PARAM_CF_ORIGIN_KEY"  ]] || die "Key file not found: $PARAM_CF_ORIGIN_KEY"
+  PARAM_CF_ORIGIN_CERT="$(cd "$(dirname "$PARAM_CF_ORIGIN_CERT")" && pwd)/$(basename "$PARAM_CF_ORIGIN_CERT")"
+  PARAM_CF_ORIGIN_KEY="$(cd "$(dirname "$PARAM_CF_ORIGIN_KEY")" && pwd)/$(basename "$PARAM_CF_ORIGIN_KEY")"
 fi
 
 # ------------------------------------------------------------
@@ -194,6 +275,14 @@ load_env_if_present() {
   [[ -z "$PARAM_XRAY_PUBLIC_KEY"   ]] && PARAM_XRAY_PUBLIC_KEY="$(_env_val XRAY_REALITY_PUBLIC_KEY)"
   [[ -z "$PARAM_XRAY_SHORT_ID"     ]] && PARAM_XRAY_SHORT_ID="$(_env_val XRAY_REALITY_SHORT_ID)"
   [[ -z "$PARAM_HOST"              ]] && PARAM_HOST="$(_env_val XRAY_HOST)"
+  [[ -z "$PARAM_PROFILE"           ]] && PARAM_PROFILE="$(_env_val XRAY_DEFAULT_PROFILE)"
+  [[ -z "$PARAM_CF_DOMAIN"         ]] && PARAM_CF_DOMAIN="$(_env_val XRAY_CF_DOMAIN)"
+  [[ -z "$PARAM_WS_ID"             ]] && PARAM_WS_ID="$(_env_val XRAY_WS_ID)"
+  [[ -z "$PARAM_XHTTP_ID"          ]] && PARAM_XHTTP_ID="$(_env_val XRAY_XHTTP_ID)"
+  [[ -z "$PARAM_VLESS_ENC_PRIVATE_KEY" ]] && PARAM_VLESS_ENC_PRIVATE_KEY="$(_env_val XRAY_VLESS_ENC_PRIVATE_KEY)"
+  [[ -z "$PARAM_VLESS_ENC_PUBLIC_KEY"  ]] && PARAM_VLESS_ENC_PUBLIC_KEY="$(_env_val XRAY_VLESS_ENC_PUBLIC_KEY)"
+  [[ -z "$PARAM_BRANCH"            ]] && PARAM_BRANCH="$(_env_val INSTALL_BRANCH)"
+  [[ -z "$PARAM_IMAGE_TAG"         ]] && PARAM_IMAGE_TAG="$(_env_val APP_IMAGE_TAG)"
   # SNI and fingerprint: only load if they haven't been overridden and the file has them
   local _sni; _sni="$(_env_val XRAY_SNI)"
   local _fp;  _fp="$(_env_val XRAY_FINGERPRINT)"
@@ -201,7 +290,35 @@ load_env_if_present() {
   [[ -z "$_fp"  ]] || PARAM_XRAY_FINGERPRINT="$_fp"
 }
 
+# In a clone, the checked-out branch is where the local files came from, so it wins over .env.
+if [[ -z "$PARAM_BRANCH" && -n "$SCRIPT_DIR" ]] && command -v git &>/dev/null; then
+  PARAM_BRANCH="$(git -c safe.directory="$SCRIPT_DIR" -C "$SCRIPT_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+fi
+
 load_env_if_present
+
+# A re-run may take the Cloudflare hostname from .env, so check this only now.
+if [[ -z "$PARAM_CF_DOMAIN" ]]; then
+  [[ -z "$PARAM_CF_API_TOKEN"   ]] || die "--cf-api-token (or CF_API_TOKEN) requires --cf-domain."
+  [[ -z "$PARAM_CF_ORIGIN_CERT" ]] || die "--cf-origin-cert/--cf-origin-key require --cf-domain."
+fi
+
+# ------------------------------------------------------------
+# Branch and image every file and container come from
+# ------------------------------------------------------------
+[[ -n "$PARAM_BRANCH"    ]] || PARAM_BRANCH="main"
+[[ -n "$PARAM_IMAGE_TAG" ]] || PARAM_IMAGE_TAG="latest"
+
+# EASY_XRAY_RAW_ROOT overrides where branches are read from, e.g. file:///path/to/branches when testing.
+RAW_ROOT="${EASY_XRAY_RAW_ROOT:-https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads}"
+GITHUB_RAW="$RAW_ROOT/$PARAM_BRANCH/deployables"
+
+info "Branch     : $PARAM_BRANCH"
+info "App image  : hamidmayeli/quick-vless:$PARAM_IMAGE_TAG"
+if [[ "$PARAM_BRANCH" != "main" && "$PARAM_IMAGE_TAG" == "latest" ]]; then
+  warn "Deployment files come from branch '$PARAM_BRANCH', but the app image is 'latest' (built from main)."
+  warn "  If the branch changes the app, pass --image-tag with the image built from it (e.g. pr-17)."
+fi
 
 # ------------------------------------------------------------
 # State helpers
@@ -214,11 +331,14 @@ mark_step_done() {
   grep -qxF "$1" "$STATE_FILE" 2>/dev/null || echo "$1" >> "$STATE_FILE"
 }
 
+# run_step NAME FUNC [always]
+#   "always" runs the step even if it is recorded as done (for idempotent steps).
 run_step() {
   local name="$1"
   local func="$2"
+  local mode="${3:-}"
 
-  if step_is_done "$name" && [[ "$PARAM_FORCE_STEP" != "$name" ]]; then
+  if [[ "$mode" != "always" ]] && step_is_done "$name" && [[ "$PARAM_FORCE_STEP" != "$name" ]]; then
     info "Step '$name' already done — skipping."
     return 0
   fi
@@ -245,35 +365,68 @@ run_step() {
 # ------------------------------------------------------------
 # 1. download_files
 # ------------------------------------------------------------
-GITHUB_RAW="https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/deployables"
+download() {
+  curl -fsSL --max-time 30 "$GITHUB_RAW/$1" -o "$2" \
+    || die "Failed to download $1 from $GITHUB_RAW/$1 — does branch '$PARAM_BRANCH' exist?"
+}
 
 step_download_files() {
-  if [[ -f "$DEPLOY_DIR/docker-compose.yaml" ]]; then
-    info "docker-compose.yaml already present in $DEPLOY_DIR — skipping download."
+  if [[ -f "$DEPLOY_DIR/docker-compose.yaml" && "$PARAM_UPGRADE" != true ]]; then
+    info "docker-compose.yaml already present in $DEPLOY_DIR — skipping download (use --upgrade to refresh)."
     return 0
   fi
 
-  info "Downloading deployment files from GitHub..."
-  mkdir -p "$DEPLOY_DIR/xray"
+  info "Downloading deployment files from $GITHUB_RAW ..."
+  local manifest
+  manifest="$(mktemp)"
+  download "manifest.txt" "$manifest"
 
-  local files=(
-    "docker-compose.yaml"
-    "Caddyfile"
-    "Dockerfile.caddy"
-    "xray/config.json"
-    "update.sh"
-  )
-
-  for f in "${files[@]}"; do
-    local dest="$DEPLOY_DIR/$f"
+  local f dest
+  while IFS= read -r f || [[ -n "$f" ]]; do
+    f="${f%$'\r'}"
+    [[ -z "$f" || "$f" == \#* ]] && continue
+    dest="$DEPLOY_DIR/$f"
     mkdir -p "$(dirname "$dest")"
+    if [[ -f "$dest" ]]; then
+      # Profile files hold values filled in by this script (or edited by hand): never replace them.
+      if [[ "$f" == xray/* ]]; then
+        info "  $f exists — kept."
+        continue
+      fi
+      cp -p "$dest" "$dest.bak"
+    fi
     info "  Downloading $f ..."
-    curl -fsSL --max-time 30 "$GITHUB_RAW/$f" -o "$dest" \
-      || die "Failed to download $f from $GITHUB_RAW/$f"
-  done
+    download "$f" "$dest"
+  done < "$manifest"
+  rm -f "$manifest"
 
-  chmod +x "$DEPLOY_DIR/update.sh"
+  chmod +x "$DEPLOY_DIR/update.sh" "$DEPLOY_DIR/xray-run.sh"
   info "All deployment files downloaded."
+}
+
+# ------------------------------------------------------------
+# migrate_legacy_layout
+# Installs from before profiles kept a single xray/config.json.
+# ------------------------------------------------------------
+step_migrate_legacy_layout() {
+  local legacy="$DEPLOY_DIR/xray/config.json"
+  local profile="$DEPLOY_DIR/xray/vless-reality/config.json"
+
+  if [[ ! -f "$legacy" ]]; then
+    info "No legacy xray/config.json — nothing to migrate."
+    return 0
+  fi
+
+  if [[ -f "$profile" ]] && ! grep -qF 'YOUR_PRIVATE_KEY' "$profile"; then
+    mv "$legacy" "$legacy.bak"
+    info "xray/vless-reality/ is already configured — kept the old xray/config.json as xray/config.json.bak."
+    return 0
+  fi
+
+  # The old file is already patched with this server's REALITY keys, so it becomes the profile.
+  mkdir -p "$(dirname "$profile")"
+  mv "$legacy" "$profile"
+  info "Moved xray/config.json to xray/vless-reality/config.json."
 }
 
 # ------------------------------------------------------------
@@ -394,6 +547,23 @@ step_check_prerequisites() {
 # ------------------------------------------------------------
 # 4. generate_secrets
 # ------------------------------------------------------------
+
+# Prints "PRIVATE PUBLIC": a raw X25519 key pair, base64url without padding, as Xray uses for
+# REALITY and VLESS Encryption.
+#   PKCS8 DER for x25519 is always 48 bytes; the last 32 are the raw private key.
+#   SubjectPublicKeyInfo DER for x25519 is always 44 bytes; the last 32 are the raw public key.
+x25519_pair() {
+  local pem private public
+  pem="$(openssl genpkey -algorithm x25519 2>/dev/null)" \
+    || die "openssl failed to generate an x25519 key pair."
+  private="$(printf '%s' "$pem" | openssl pkey -outform DER 2>/dev/null | tail -c 32 \
+    | base64 | tr '+/' '-_' | tr -d '=')"
+  public="$(printf '%s' "$pem" | openssl pkey -pubout -outform DER 2>/dev/null | tail -c 32 \
+    | base64 | tr '+/' '-_' | tr -d '=')"
+  [[ -n "$private" && -n "$public" ]] || die "Failed to derive an x25519 key pair from openssl output."
+  echo "$private $public"
+}
+
 step_generate_secrets() {
   # JWT secret
   if [[ -z "$PARAM_JWT_SECRET" ]]; then
@@ -406,22 +576,21 @@ step_generate_secrets() {
   # Xray Reality key pair
   if [[ -z "$PARAM_XRAY_PRIVATE_KEY" || -z "$PARAM_XRAY_PUBLIC_KEY" ]]; then
     info "  Generating Xray x25519 key pair via openssl..."
-    # PKCS8 DER for x25519 is always 48 bytes; last 32 are the raw private key.
-    # SubjectPublicKeyInfo DER for x25519 is always 44 bytes; last 32 are the raw public key.
-    local xray_key_pem
-    xray_key_pem="$(openssl genpkey -algorithm x25519 2>/dev/null)" \
-      || die "openssl failed to generate an x25519 key pair."
-    PARAM_XRAY_PRIVATE_KEY="$(printf '%s' "$xray_key_pem" \
-      | openssl pkey -outform DER 2>/dev/null | tail -c 32 \
-      | base64 | tr '+/' '-_' | tr -d '=')"
-    PARAM_XRAY_PUBLIC_KEY="$(printf '%s' "$xray_key_pem" \
-      | openssl pkey -pubout -outform DER 2>/dev/null | tail -c 32 \
-      | base64 | tr '+/' '-_' | tr -d '=')"
-    [[ -n "$PARAM_XRAY_PRIVATE_KEY" && -n "$PARAM_XRAY_PUBLIC_KEY" ]] \
-      || die "Failed to derive x25519 key pair from openssl output."
+    read -r PARAM_XRAY_PRIVATE_KEY PARAM_XRAY_PUBLIC_KEY <<<"$(x25519_pair)"
+    [[ -n "$PARAM_XRAY_PUBLIC_KEY" ]] || die "Could not generate the REALITY key pair."
     info "  Xray key pair generated."
   else
     info "  Xray key pair: (provided)"
+  fi
+
+  # VLESS Encryption key pair of the Cloudflare XHTTP profile: the X25519 authentication of
+  # mlkem768x25519plus. Xray calls the public key the "password".
+  if [[ -z "$PARAM_VLESS_ENC_PRIVATE_KEY" || -z "$PARAM_VLESS_ENC_PUBLIC_KEY" ]]; then
+    read -r PARAM_VLESS_ENC_PRIVATE_KEY PARAM_VLESS_ENC_PUBLIC_KEY <<<"$(x25519_pair)"
+    [[ -n "$PARAM_VLESS_ENC_PUBLIC_KEY" ]] || die "Could not generate the VLESS Encryption key pair."
+    info "  VLESS Encryption key pair generated."
+  else
+    info "  VLESS Encryption key pair: (provided)"
   fi
 
   # Short ID
@@ -440,8 +609,26 @@ step_generate_secrets() {
     info "  Host: (provided) $PARAM_HOST"
   fi
 
+  # Paths of the Cloudflare profiles: random per server, so installs don't share one.
+  if [[ -z "$PARAM_WS_ID" ]]; then
+    PARAM_WS_ID="ws-$(openssl rand -hex 12)"
+    info "  WebSocket path: (generated) /$PARAM_WS_ID"
+  else
+    info "  WebSocket path: (provided) /$PARAM_WS_ID"
+  fi
+  if [[ -z "$PARAM_XHTTP_ID" ]]; then
+    PARAM_XHTTP_ID="xh-$(openssl rand -hex 12)"
+    info "  XHTTP path    : (generated) /$PARAM_XHTTP_ID"
+  else
+    info "  XHTTP path    : (provided) /$PARAM_XHTTP_ID"
+  fi
+
+  [[ -n "$PARAM_PROFILE" ]] || PARAM_PROFILE="vless-reality"
+
   info "  SNI         : $PARAM_XRAY_SNI"
   info "  Fingerprint : $PARAM_XRAY_FINGERPRINT"
+  info "  Profile     : $PARAM_PROFILE"
+  [[ -z "$PARAM_CF_DOMAIN" ]] || info "  CF domain   : $PARAM_CF_DOMAIN"
   info "Secrets ready."
 }
 
@@ -469,6 +656,14 @@ XRAY_REALITY_PUBLIC_KEY=${PARAM_XRAY_PUBLIC_KEY}
 XRAY_REALITY_SHORT_ID=${PARAM_XRAY_SHORT_ID}
 XRAY_SNI=${PARAM_XRAY_SNI}
 XRAY_FINGERPRINT=${PARAM_XRAY_FINGERPRINT}
+XRAY_DEFAULT_PROFILE=${PARAM_PROFILE}
+XRAY_CF_DOMAIN=${PARAM_CF_DOMAIN}
+XRAY_WS_ID=${PARAM_WS_ID}
+XRAY_XHTTP_ID=${PARAM_XHTTP_ID}
+XRAY_VLESS_ENC_PRIVATE_KEY=${PARAM_VLESS_ENC_PRIVATE_KEY}
+XRAY_VLESS_ENC_PUBLIC_KEY=${PARAM_VLESS_ENC_PUBLIC_KEY}
+INSTALL_BRANCH=${PARAM_BRANCH}
+APP_IMAGE_TAG=${PARAM_IMAGE_TAG}
 EOF
 
   chmod 600 "$env_file"
@@ -476,50 +671,255 @@ EOF
 }
 
 # ------------------------------------------------------------
-# 6. write_xray_config
+# 6. install_cf_certificate
 # ------------------------------------------------------------
-step_write_xray_config() {
-  local config="$DEPLOY_DIR/xray/config.json"
 
-  [[ -f "$config" ]] || die "xray/config.json not found at $config"
-  [[ -n "$PARAM_XRAY_PRIVATE_KEY" ]] || die "XRAY_REALITY_PRIVATE_KEY is empty."
-  [[ -n "$PARAM_XRAY_SHORT_ID"    ]] || die "XRAY_REALITY_SHORT_ID is empty."
+# san_covers HOST "SAN SAN ..." — a wildcard covers exactly one level:
+# *.example.com covers cdn.example.com, but not a.b.example.com or example.com.
+san_covers() {
+  local host="${1,,}" san
+  for san in $2; do
+    san="${san,,}"
+    [[ "$san" == "$host" ]] && return 0
+    if [[ "$san" == \*.* && "$host" == *.* && "${host#*.}" == "${san#\*.}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
-  local patched=false
+# certificate_problem CERT KEY HOST — prints why CERT/KEY can't serve HOST, and fails; silent if they can.
+certificate_problem() {
+  local cert="$1" key="$2" host="$3"
 
-  if grep -qF 'YOUR_PRIVATE_KEY' "$config"; then
-    info "  Patching YOUR_PRIVATE_KEY in xray/config.json ..."
-    sed -i "s|YOUR_PRIVATE_KEY|${PARAM_XRAY_PRIVATE_KEY}|g" "$config"
-    patched=true
-  else
-    info "  YOUR_PRIVATE_KEY placeholder not found — already patched."
+  if ! openssl x509 -in "$cert" -noout 2>/dev/null; then echo "$cert is not a PEM certificate."; return 1; fi
+  if ! openssl pkey -in "$key" -noout 2>/dev/null;  then echo "$key is not a PEM private key."; return 1; fi
+
+  local cert_pub key_pub
+  cert_pub="$(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null)"
+  key_pub="$(openssl pkey -in "$key" -pubout 2>/dev/null)"
+  if [[ -z "$cert_pub" || "$cert_pub" != "$key_pub" ]]; then
+    echo "The private key $key does not belong to the certificate $cert."
+    return 1
   fi
 
-  if grep -qF 'YOUR_SHORT_ID' "$config"; then
-    info "  Patching YOUR_SHORT_ID in xray/config.json ..."
-    sed -i "s|YOUR_SHORT_ID|${PARAM_XRAY_SHORT_ID}|g" "$config"
-    patched=true
-  else
-    info "  YOUR_SHORT_ID placeholder not found — already patched."
-  fi
-
-  if grep -qF 'YOUR_SNI' "$config"; then
-    info "  Patching YOUR_SNI in xray/config.json ..."
-    sed -i "s|YOUR_SNI|${PARAM_XRAY_SNI}|g" "$config"
-    patched=true
-  else
-    info "  YOUR_SNI placeholder not found — already patched."
-  fi
-
-  if [[ "$patched" == true ]]; then
-    info "xray/config.json patched."
-  else
-    info "xray/config.json required no changes (already configured)."
+  local sans
+  sans="$(openssl x509 -in "$cert" -noout -ext subjectAltName 2>/dev/null \
+    | grep -o 'DNS:[^,]*' | cut -d: -f2 | tr -d ' ' | tr '\n' ' ' || true)"
+  if ! san_covers "$host" "$sans"; then
+    echo "The certificate does not cover $host (it covers: ${sans:-nothing}). Note that *.example.com covers cdn.example.com but not a.b.example.com."
+    return 1
   fi
 }
 
+# check_certificate CERT KEY HOST — dies unless CERT/KEY are a matching PEM pair covering HOST.
+check_certificate() {
+  local problem
+  problem="$(certificate_problem "$1" "$2" "$3")" || die "$problem"
+  info "  Certificate covers $3 and expires $(cert_end_date "$1")."
+}
+
+cert_end_date() { openssl x509 -in "$1" -noout -enddate | cut -d= -f2; }
+
+# True when CERT expires within 30 days.
+cert_expires_soon() { ! openssl x509 -in "$1" -noout -checkend 2592000 >/dev/null 2>&1; }
+
+# install_pem_pair CERT KEY DEST_CERT DEST_KEY — copies the pair into place; notes whether it changed.
+install_pem_pair() {
+  local src_cert="$1" src_key="$2" cert="$3" key="$4"
+  mkdir -p "$(dirname "$cert")"
+  if ! cmp -s "$src_cert" "$cert" 2>/dev/null || ! cmp -s "$src_key" "$key" 2>/dev/null; then
+    CF_CERT_CHANGED=true
+  fi
+  if [[ "$src_cert" != "$cert" ]]; then cp "$src_cert" "$cert"; fi
+  if [[ "$src_key"  != "$key"  ]]; then cp "$src_key"  "$key";  fi
+  chmod 644 "$cert"
+  chmod 600 "$key"
+}
+
+# EASY_XRAY_CF_API overrides the Cloudflare API, for testing.
+CF_API="${EASY_XRAY_CF_API:-https://api.cloudflare.com/client/v4}"
+
+# create_origin_certificate CERT KEY — asks Cloudflare's Origin CA for a 15-year certificate
+# covering --cf-domain and writes the pair to CERT and KEY. The private key is generated here
+# and never leaves the server: Cloudflare only receives a certificate signing request.
+create_origin_certificate() {
+  local cert="$1" key="$2" work response pem reasons
+  work="$(mktemp -d)"
+  chmod 700 "$work"
+
+  if ! openssl req -new -newkey rsa:2048 -nodes -keyout "$work/privkey.pem" \
+      -out "$work/request.csr" -subj "/CN=$PARAM_CF_DOMAIN" 2>/dev/null; then
+    rm -rf "$work"
+    die "openssl could not create a certificate signing request."
+  fi
+
+  printf '{"hostnames":["%s"],"requested_validity":5475,"request_type":"origin-rsa","csr":"%s"}' \
+    "$PARAM_CF_DOMAIN" "$(awk '{ printf "%s\\n", $0 }' "$work/request.csr")" > "$work/request.json"
+  # The header is read from a file so the token never shows up in the process list.
+  printf 'Authorization: Bearer %s\n' "$PARAM_CF_API_TOKEN" > "$work/auth.header"
+
+  info "  Asking Cloudflare to create an Origin certificate for $PARAM_CF_DOMAIN ..."
+  if ! response="$(curl -sS --max-time 30 -X POST "$CF_API/certificates" \
+      -H @"$work/auth.header" -H "Content-Type: application/json" \
+      --data-binary @"$work/request.json" 2>&1)"; then
+    rm -rf "$work"
+    die "Could not reach the Cloudflare API: $response"
+  fi
+  rm -f "$work/auth.header"
+
+  # The PEM comes back as one JSON string with \n escapes (and possibly \/).
+  response="$(tr -d '\r\n' <<<"$response")"
+  pem="$(sed -n 's/.*"certificate" *: *"\([^"]*\)".*/\1/p' <<<"$response" | sed 's#\\/#/#g')"
+  if ! grep -q '"success" *: *true' <<<"$response" || [[ -z "$pem" ]]; then
+    reasons="$(grep -o '"message" *: *"[^"]*"' <<<"$response" | cut -d'"' -f4 | tr '\n' ';' | sed 's/;$//; s/;/; /g' || true)"
+    rm -rf "$work"
+    die "Cloudflare did not create the certificate: ${reasons:-unexpected response}. The token needs the permission Zone → SSL and Certificates → Edit on the zone of $PARAM_CF_DOMAIN."
+  fi
+  printf '%b' "$pem" > "$cert"
+  mv "$work/privkey.pem" "$key"
+  rm -rf "$work"
+
+  check_certificate "$cert" "$key" "$PARAM_CF_DOMAIN"
+  info "  Cloudflare created the Origin certificate."
+}
+
+# Prints the profile folders that terminate TLS with the Origin certificate: their config.json
+# reads it from their own tls/ folder (e.g. vless-cf-ws, vless-cf-xhttp).
+cf_profile_dirs() {
+  local dir
+  for dir in "$DEPLOY_DIR"/xray/*/; do
+    dir="${dir%/}"
+    if grep -qF "/etc/xray/profiles/$(basename "$dir")/tls/fullchain.pem" "$dir/config.json" 2>/dev/null; then
+      echo "$dir"
+    fi
+  done
+}
+
+step_install_cf_certificate() {
+  if [[ -z "$PARAM_CF_DOMAIN" ]]; then
+    info "No --cf-domain — the Cloudflare profiles stay disabled."
+    return 0
+  fi
+
+  # Caddy routes the management SNI to itself, and REALITY clients must reach the server directly.
+  local other
+  for other in "$PARAM_DOMAIN" "$PARAM_HOST"; do
+    [[ "${PARAM_CF_DOMAIN,,}" != "${other,,}" ]] \
+      || die "--cf-domain ($PARAM_CF_DOMAIN) must differ from --domain and --host."
+  done
+
+  local -a dirs
+  mapfile -t dirs < <(cf_profile_dirs)
+  if [[ ${#dirs[@]} -eq 0 ]]; then
+    warn "No profile in xray/ reads an Origin certificate from its tls/ folder — nothing to install."
+    return 0
+  fi
+
+  # The certificate already installed in one of those profiles, if it still covers --cf-domain.
+  local d cert="" key="" problem=""
+  for d in "${dirs[@]}"; do
+    [[ -f "$d/tls/fullchain.pem" && -f "$d/tls/privkey.pem" ]] || continue
+    if problem="$(certificate_problem "$d/tls/fullchain.pem" "$d/tls/privkey.pem" "$PARAM_CF_DOMAIN")"; then
+      cert="$d/tls/fullchain.pem"
+      key="$d/tls/privkey.pem"
+      break
+    fi
+  done
+
+  local staging=""
+  if [[ -n "$PARAM_CF_ORIGIN_CERT" ]]; then
+    check_certificate "$PARAM_CF_ORIGIN_CERT" "$PARAM_CF_ORIGIN_KEY" "$PARAM_CF_DOMAIN"
+    cert="$PARAM_CF_ORIGIN_CERT"
+    key="$PARAM_CF_ORIGIN_KEY"
+  elif [[ -n "$cert" ]] && ! { cert_expires_soon "$cert" && [[ -n "$PARAM_CF_API_TOKEN" ]]; }; then
+    # A usable certificate is already installed: don't ask Cloudflare for another one on every run.
+    if cert_expires_soon "$cert"; then
+      warn "The Origin certificate expires on $(cert_end_date "$cert")."
+      warn "  Re-run with --cf-api-token (or CF_API_TOKEN) to replace it."
+    fi
+    info "Using the installed Origin certificate (expires $(cert_end_date "$cert"))."
+  elif [[ -n "$PARAM_CF_API_TOKEN" ]]; then
+    if [[ -n "$cert" ]]; then
+      info "The Origin certificate expires on $(cert_end_date "$cert") — replacing it."
+    elif [[ -n "$problem" ]]; then
+      info "The installed certificate can't be used: $problem"
+    fi
+    staging="$(mktemp -d)"
+    chmod 700 "$staging"
+    create_origin_certificate "$staging/fullchain.pem" "$staging/privkey.pem"
+    cert="$staging/fullchain.pem"
+    key="$staging/privkey.pem"
+  elif [[ -n "$problem" ]]; then
+    die "$problem Pass --cf-api-token to create a new certificate, or --cf-origin-cert and --cf-origin-key."
+  else
+    die "--cf-domain needs a certificate the first time: pass --cf-api-token (or set CF_API_TOKEN) to have Cloudflare create one, or --cf-origin-cert and --cf-origin-key with one you created in Cloudflare (SSL/TLS → Origin Server)."
+  fi
+
+  # Every Cloudflare profile gets its own copy, so each profile folder stays self-contained.
+  for d in "${dirs[@]}"; do
+    install_pem_pair "$cert" "$key" "$d/tls/fullchain.pem" "$d/tls/privkey.pem"
+  done
+  [[ -z "$staging" ]] || rm -rf "$staging"
+  info "Origin certificate in place for: $(for d in "${dirs[@]}"; do basename "$d"; done | tr '\n' ' ')"
+}
+
 # ------------------------------------------------------------
-# 7. pull_images
+# 7. write_xray_profiles
+# ------------------------------------------------------------
+
+sed_escape() { printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'; }
+
+# Fills in the install-time placeholders of one profile file. A placeholder whose value
+# is empty (e.g. YOUR_CF_DOMAIN without --cf-domain) is left for the app to report.
+patch_profile_file() {
+  local file="$1" i placeholder value
+  local -a pairs=(
+    YOUR_PRIVATE_KEY "$PARAM_XRAY_PRIVATE_KEY"
+    YOUR_PUBLIC_KEY  "$PARAM_XRAY_PUBLIC_KEY"
+    YOUR_SHORT_ID    "$PARAM_XRAY_SHORT_ID"
+    YOUR_SNI         "$PARAM_XRAY_SNI"
+    YOUR_HOST        "$PARAM_HOST"
+    YOUR_FINGERPRINT "$PARAM_XRAY_FINGERPRINT"
+    YOUR_CF_DOMAIN   "$PARAM_CF_DOMAIN"
+    YOUR_WS_ID       "$PARAM_WS_ID"
+    YOUR_XHTTP_ID    "$PARAM_XHTTP_ID"
+    YOUR_VLESS_ENC_PRIVATE_KEY "$PARAM_VLESS_ENC_PRIVATE_KEY"
+    YOUR_VLESS_ENC_PUBLIC_KEY  "$PARAM_VLESS_ENC_PUBLIC_KEY"
+  )
+  for (( i = 0; i < ${#pairs[@]}; i += 2 )); do
+    placeholder="${pairs[i]}"
+    value="${pairs[i + 1]}"
+    grep -qF "$placeholder" "$file" || continue
+    [[ -n "$value" ]] || continue
+    sed -i "s|$placeholder|$(sed_escape "$value")|g" "$file"
+    info "  ${file#"$DEPLOY_DIR/"}: filled in $placeholder"
+  done
+}
+
+step_write_xray_profiles() {
+  local dir file count=0
+  shopt -s nullglob
+  for dir in "$DEPLOY_DIR"/xray/*/; do
+    for file in "${dir}config.json" "${dir}client-config.template"; do
+      [[ -f "$file" ]] || continue
+      patch_profile_file "$file"
+    done
+    count=$((count + 1))
+  done
+  shopt -u nullglob
+
+  [[ $count -gt 0 ]] || die "No profiles found in $DEPLOY_DIR/xray/."
+  [[ -d "$DEPLOY_DIR/xray/$PARAM_PROFILE" ]] \
+    || die "--profile $PARAM_PROFILE: there is no xray/$PARAM_PROFILE folder."
+  if grep -qF 'YOUR_CF_DOMAIN' "$DEPLOY_DIR/xray/$PARAM_PROFILE/client-config.template" 2>/dev/null; then
+    die "--profile $PARAM_PROFILE needs --cf-domain."
+  fi
+  info "Profiles ready ($count found; the app reports any that still need values)."
+}
+
+# ------------------------------------------------------------
+# 8. pull_images
 # ------------------------------------------------------------
 step_pull_images() {
   if [[ "$PARAM_SKIP_PULL" == true ]]; then
@@ -534,7 +934,7 @@ step_pull_images() {
 }
 
 # ------------------------------------------------------------
-# 8. start_services
+# 9. start_services
 # ------------------------------------------------------------
 step_start_services() {
   info "Starting services with 'docker compose up -d' ..."
@@ -543,8 +943,20 @@ step_start_services() {
   info "Services started."
 }
 
+# Xray reads certificates only when it starts, and replacing one doesn't change its config's
+# structure, so the app won't restart it. Do it here when an already running install got a new one.
+step_reload_xray() {
+  # A container started by this run already loaded the new certificate.
+  if [[ "$CF_CERT_CHANGED" != true || "$XRAY_WAS_RUNNING" != true ]]; then
+    return 0
+  fi
+  info "The Origin certificate changed — restarting Xray to load it ..."
+  (cd "$DEPLOY_DIR" && docker compose restart xray) \
+    || warn "Could not restart Xray. Run 'docker compose restart xray' in $DEPLOY_DIR."
+}
+
 # ------------------------------------------------------------
-# 9. setup_cron_jobs
+# 10. setup_cron_jobs
 # ------------------------------------------------------------
 step_setup_cron_jobs() {
   if ! command -v crontab &>/dev/null; then
@@ -568,7 +980,7 @@ step_setup_cron_jobs() {
 }
 
 # ------------------------------------------------------------
-# 10. verify_health
+# 11. verify_health
 # ------------------------------------------------------------
 step_verify_health() {
   local max_attempts=30
@@ -593,6 +1005,53 @@ step_verify_health() {
   return 0
 }
 
+# ------------------------------------------------------------
+# 12. verify_cloudflare
+# ------------------------------------------------------------
+
+# The profile Xray runs: the super admin's choice once made, else the first-start default.
+active_profile() {
+  local settings="$DEPLOY_DIR/data/app/settings.json" active=""
+  if [[ -f "$settings" ]]; then
+    active="$(grep -o '"xray_active_profile": *"[^"]*"' "$settings" | cut -d'"' -f4 || true)"
+  fi
+  echo "${active:-$PARAM_PROFILE}"
+}
+
+step_verify_cloudflare() {
+  [[ -n "$PARAM_CF_DOMAIN" ]] || return 0
+  info "Checking https://$PARAM_CF_DOMAIN through Cloudflare ..."
+
+  local headers status
+  if ! headers="$(curl -sS -o /dev/null -D - --max-time 15 "https://$PARAM_CF_DOMAIN/" 2>&1)"; then
+    warn "Could not open https://$PARAM_CF_DOMAIN: $(tail -1 <<<"$headers")"
+    warn "  Cloudflare's edge certificate isn't valid for this hostname. Use a hostname one level deep"
+    warn "  (cdn.example.com, not a.cdn.example.com), and check the zone is active on Cloudflare."
+    return 0
+  fi
+
+  if ! grep -qi '^server: *cloudflare' <<<"$headers"; then
+    warn "$PARAM_CF_DOMAIN is not proxied by Cloudflare (no 'server: cloudflare' header)."
+    warn "  Turn on the orange cloud for its DNS record. Otherwise VPN clients connect straight to"
+    warn "  this server, see the Origin CA certificate, and fail."
+    return 0
+  fi
+
+  status="$(head -1 <<<"$headers" | awk '{print $2}')"
+  # Only meaningful while a Cloudflare profile runs: with REALITY active, Cloudflare's
+  # connection lands on REALITY and always looks like a certificate error.
+  local active
+  active="$(active_profile)"
+  if cf_profile_dirs | grep -qxF "$DEPLOY_DIR/xray/$active" && [[ "$status" == "525" || "$status" == "526" ]]; then
+    warn "Cloudflare answered $status: its TLS connection to this server failed (525) or the"
+    warn "  certificate was rejected (526). Check the Origin certificate in xray/$active/tls/"
+    warn "  and set SSL/TLS mode to Full (strict)."
+    return 0
+  fi
+
+  info "Cloudflare proxy OK ($PARAM_CF_DOMAIN answered HTTP $status through Cloudflare)."
+}
+
 # ============================================================
 # Main
 # ============================================================
@@ -603,21 +1062,43 @@ log "  easy-xray deployment"
 log "  Domain : $PARAM_DOMAIN"
 log "============================================================"
 
-run_step "download_files"          step_download_files
+# --upgrade re-runs the steps that bring an existing install up to date.
+UPGRADE_MODE=""
+[[ "$PARAM_UPGRADE" == true ]] && UPGRADE_MODE="always"
+
+CF_CERT_CHANGED=false
+XRAY_WAS_RUNNING=false
+
+run_step "download_files"          step_download_files          "$UPGRADE_MODE"
+run_step "migrate_legacy_layout"   step_migrate_legacy_layout   always
 run_step "install_prerequisites"   step_install_prerequisites
 run_step "check_prerequisites"     step_check_prerequisites
-run_step "generate_secrets"     step_generate_secrets
-run_step "write_env_file"       step_write_env_file
-run_step "write_xray_config"    step_write_xray_config
-run_step "pull_images"          step_pull_images
-run_step "start_services"       step_start_services
-run_step "setup_cron_jobs"      step_setup_cron_jobs
-run_step "verify_health"        step_verify_health
+run_step "generate_secrets"        step_generate_secrets        always
+run_step "write_env_file"          step_write_env_file          always
+run_step "install_cf_certificate"  step_install_cf_certificate  always
+run_step "write_xray_profiles"     step_write_xray_profiles     always
+run_step "pull_images"             step_pull_images             "$UPGRADE_MODE"
+if command -v docker &>/dev/null \
+    && [[ -n "$(cd "$DEPLOY_DIR" && docker compose ps -q --status running xray 2>/dev/null || true)" ]]; then
+  XRAY_WAS_RUNNING=true
+fi
+run_step "start_services"          step_start_services          "$UPGRADE_MODE"
+run_step "reload_xray"             step_reload_xray             always
+run_step "setup_cron_jobs"         step_setup_cron_jobs
+run_step "verify_health"           step_verify_health
+run_step "verify_cloudflare"       step_verify_cloudflare       always
 
 echo ""
 echo "============================================================"
 echo "  easy-xray is running!"
 echo "  Management UI: https://${PARAM_DOMAIN}"
-echo "  First login: enter any username and password to create the admin account"
-echo "  Documentation: https://github.com/hamidmayeli/easy-xray/blob/main/docs/hosting.md"
+echo "  First login: enter any username and password to create the super admin account"
+echo "  Active profile on first start: ${PARAM_PROFILE} (switch it on the Profiles page)"
+if [[ -n "$PARAM_CF_DOMAIN" ]]; then
+  echo "  Cloudflare profiles on ${PARAM_CF_DOMAIN}: $(cf_profile_dirs | xargs -r -n1 basename | tr '\n' ' ')"
+fi
+if [[ "$PARAM_BRANCH" != "main" || "$PARAM_IMAGE_TAG" != "latest" ]]; then
+  echo "  Installed from branch ${PARAM_BRANCH} with app image tag ${PARAM_IMAGE_TAG}"
+fi
+echo "  Documentation: https://github.com/hamidmayeli/quick-vless/blob/${PARAM_BRANCH}/docs/hosting.md"
 echo "============================================================"

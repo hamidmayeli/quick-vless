@@ -56,8 +56,10 @@ jobs:
           chmod +x /tmp/fake-xray/xray
 
       - name: Prepare storage dirs
-        run: mkdir -p /tmp/easy-xray-ci/usage_history
+        run: mkdir -p /tmp/easy-xray-ci/usage_history /tmp/easy-xray-ci/xray-runtime
 
+      # Profile mode with the e2e fixtures. There is no Xray container (and no xray-run.sh),
+      # so restart confirmation is off; the fake xray binary makes `xray run -test` pass.
       - name: Start app container
         run: |
           docker run -d \
@@ -65,6 +67,7 @@ jobs:
             -p 8080:8080 \
             -v /tmp/fake-xray/xray:/usr/local/bin/xray \
             -v /tmp/easy-xray-ci:/tmp/easy-xray-ci \
+            -v "$GITHUB_WORKSPACE/management-app/e2e/fixtures/xray-profiles:/etc/xray/profiles:ro" \
             -e ASPNETCORE_HTTP_PORTS=8080 \
             -e ASPNETCORE_ENVIRONMENT=Production \
             -e Jwt__Secret=ci-test-secret-minimum-32-chars-long-x \
@@ -72,16 +75,13 @@ jobs:
             -e Storage__UsersPath=/tmp/easy-xray-ci/users.json \
             -e Storage__AdminsPath=/tmp/easy-xray-ci/admins.json \
             -e Storage__UsageHistoryDir=/tmp/easy-xray-ci/usage_history \
+            -e Storage__SettingsPath=/tmp/easy-xray-ci/settings.json \
             -e Xray__BinaryPath=/usr/local/bin/xray \
-            -e Xray__ConfigPath=/tmp/easy-xray-ci/xray.json \
+            -e Xray__ProfilesDir=/etc/xray/profiles \
+            -e Xray__RuntimeDir=/tmp/easy-xray-ci/xray-runtime \
+            -e Xray__DefaultProfile=fixture-reality \
+            -e Xray__RestartConfirmTimeoutSeconds=0 \
             -e Xray__StatsServer=127.0.0.1:10085 \
-            -e Xray__InboundTag=vless-in \
-            -e Xray__Host=localhost \
-            -e Xray__Port=443 \
-            -e Xray__RealityPublicKey=ci-placeholder-public-key \
-            -e Xray__RealityShortId=a1b2c3d4 \
-            -e Xray__Sni=www.microsoft.com \
-            -e Xray__Fingerprint=chrome \
             hamidmayeli/quick-vless:ci-test
 
       - name: Wait for backend

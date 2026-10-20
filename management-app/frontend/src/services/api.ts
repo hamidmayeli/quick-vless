@@ -1,13 +1,21 @@
-import type { Admin, AdminRole, AuthTokens, Session, User, UsageRecord } from '@/types'
+import type { Admin, AdminRole, AuthTokens, Session, User, UsageRecord, XrayProfilesState } from '@/types'
 
 const BASE = '/api/v1'
 
+/** Error body some endpoints return: `{ error }` or `{ errors: [...] }`. */
+export interface ApiErrorBody {
+  error?: string
+  errors?: string[]
+}
+
 export class ApiError extends Error {
   readonly status: number
+  readonly body: ApiErrorBody | null
 
-  constructor(status: number, statusText: string) {
+  constructor(status: number, statusText: string, body: ApiErrorBody | null = null) {
     super(`${status} ${statusText}`)
     this.status = status
+    this.body = body
   }
 }
 
@@ -77,7 +85,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error('Unauthorized')
   }
-  if (!res.ok) throw new ApiError(res.status, res.statusText)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as ApiErrorBody | null
+    throw new ApiError(res.status, res.statusText, body)
+  }
   if (res.status === 204) return undefined as T
   return res.json()
 }
@@ -117,6 +128,16 @@ export const adminsApi = {
 
   remove: (username: string): Promise<void> =>
     request(`/admins/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+}
+
+export const xrayApi = {
+  profiles: (): Promise<XrayProfilesState> => request('/xray/profiles'),
+
+  activate: (name: string): Promise<{ active: string }> =>
+    request('/xray/active-profile', { method: 'PUT', body: JSON.stringify({ name }) }),
+
+  reapply: (): Promise<{ active: string }> =>
+    request('/xray/active-profile/reapply', { method: 'POST' }),
 }
 
 export const usageApi = {

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace API.Tests.Integration;
 
@@ -12,6 +14,14 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "easy-xray-test-" + Guid.NewGuid());
 
     public string DataDir => _tempDir;
+    public string ProfilesDir => Path.Combine(_tempDir, "profiles");
+    public string RuntimeDir => Path.Combine(_tempDir, "xray-runtime");
+
+    /// <summary>Extra configuration, applied after the defaults. Set before the first CreateClient().</summary>
+    public Dictionary<string, string?> Settings { get; } = [];
+
+    /// <summary>Service replacements (e.g. fakes). Set before the first CreateClient().</summary>
+    public Action<IServiceCollection>? TestServices { get; set; }
 
     /// <summary>Writes a file into the data directory. Call before the first CreateClient() so startup sees it.</summary>
     public void SeedFile(string relativePath, string content)
@@ -19,6 +29,15 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         var path = Path.Combine(_tempDir, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+    }
+
+    /// <summary>Switches the app to profile mode with the test profiles (REALITY, WebSocket, broken).</summary>
+    public CustomWebApplicationFactory WithProfiles(string? defaultProfile = null)
+    {
+        TestProfiles.WriteAll(ProfilesDir);
+        Settings["Xray:ProfilesDir"] = ProfilesDir;
+        if (defaultProfile is not null) Settings["Xray:DefaultProfile"] = defaultProfile;
+        return this;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -32,6 +51,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Storage:UsersPath"] = Path.Combine(_tempDir, "users.json"),
                 ["Storage:AdminsPath"] = Path.Combine(_tempDir, "admins.json"),
                 ["Storage:UsageHistoryDir"] = Path.Combine(_tempDir, "usage_history"),
+                ["Storage:SettingsPath"] = Path.Combine(_tempDir, "settings.json"),
+                ["Xray:RuntimeDir"] = RuntimeDir,
+                ["Xray:RestartConfirmTimeoutSeconds"] = "0",
                 ["Xray:BinaryPath"] = "nonexistent-xray-binary",
                 ["Xray:ConfigPath"] = Path.Combine(_tempDir, "nonexistent-config.json"),
                 ["Xray:StatsServer"] = "127.0.0.1:10085",
@@ -42,7 +64,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Xray:Sni"] = "test.example.com",
                 ["Xray:Fingerprint"] = "chrome",
             });
+            cfg.AddInMemoryCollection(Settings);
         });
+        if (TestServices is not null) builder.ConfigureTestServices(TestServices);
     }
 
     protected override void Dispose(bool disposing)

@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using API.Auth;
 using API.Models;
-using API.Services;
+using API.Services.Xray;
 using API.Storage;
 
 namespace API.Endpoints;
@@ -25,8 +25,7 @@ public static class UsersEndpoints
             CreateUserRequest req,
             ClaimsPrincipal me,
             UserRepository repo,
-            XrayService xray,
-            XrayConfigFileService configFile,
+            XrayRuntime xray,
             ILogger<Log> logger) =>
         {
             var user = new User
@@ -41,8 +40,7 @@ public static class UsersEndpoints
                 CreatedBy = me.GetUsername(),
             };
             await repo.AddAsync(user);
-            if (user.Enabled) await xray.AddUserAsync(user);
-            await configFile.SyncAsync();
+            await xray.UserAddedAsync(user);
             logger.LogInformation("POST /users — {Admin} created user {Name} id={Id} enabled={Enabled}",
                 user.CreatedBy, user.Name, user.Id, user.Enabled);
             return Results.Created($"/users/{user.Id}", user);
@@ -53,8 +51,7 @@ public static class UsersEndpoints
             UpdateUserRequest req,
             ClaimsPrincipal me,
             UserRepository repo,
-            XrayService xray,
-            XrayConfigFileService configFile,
+            XrayRuntime xray,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("PUT /users/{Id}", id);
@@ -72,11 +69,7 @@ public static class UsersEndpoints
             existing.SingleConnection = req.SingleConnection ?? existing.SingleConnection;
             existing.Enabled = req.Enabled ?? existing.Enabled;
             await repo.UpdateAsync(existing);
-
-            if (!wasEnabled && existing.Enabled) await xray.AddUserAsync(existing);
-            else if (wasEnabled && !existing.Enabled) await xray.RemoveUserAsync(existing);
-
-            await configFile.SyncAsync();
+            await xray.UserUpdatedAsync(existing, wasEnabled);
             logger.LogInformation("PUT /users/{Id} — updated, enabled={Enabled}", id, existing.Enabled);
             return Results.Ok(existing);
         });
@@ -85,8 +78,7 @@ public static class UsersEndpoints
             string id,
             ClaimsPrincipal me,
             UserRepository repo,
-            XrayService xray,
-            XrayConfigFileService configFile,
+            XrayRuntime xray,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("DELETE /users/{Id}", id);
@@ -96,9 +88,8 @@ public static class UsersEndpoints
                 logger.LogWarning("DELETE /users/{Id} — not found", id);
                 return Results.NotFound();
             }
-            if (user.Enabled) await xray.RemoveUserAsync(user);
             await repo.DeleteAsync(id);
-            await configFile.SyncAsync();
+            await xray.UserRemovedAsync(user);
             logger.LogInformation("DELETE /users/{Id} — deleted {Name}", id, user.Name);
             return Results.NoContent();
         });

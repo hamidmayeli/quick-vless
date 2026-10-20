@@ -101,11 +101,16 @@ Stores the api users (AKA admins)
 * **Admin management endpoints** (super admin only): `GET /admins`, `POST /admins` (`{ "username": "..." }`, created without a password), `DELETE /admins/{username}` (reassigns the admin's users to the super admin).
 * **Authentication endpoints**: Login and refresh token and other required endpoints. The first login on an empty store creates the super admin. Access tokens carry the admin's role; every request re-checks the admin in `admins.json`, so deleted admins are rejected immediately.
 * **Usage report**: returning the usage users, scoped like the user list
+* **Xray profile endpoints** (super admin only): `GET /xray/profiles` (every profile, its validation errors, and which one is active and applied), `PUT /xray/active-profile` (`{ "name": "..." }`), `POST /xray/active-profile/reapply`.
 
 ### 2.2 Configuration Management
 
-* **Startup & Sync:** Reads `users.json` and updates Xray's `/usr/local/etc/xray/config.json` inbound `clients` list.
-* **Hot-Reloading:** Uses Xray's gRPC Handler API (`xray api command HandlerService`) to dynamically add or remove user credentials at runtime without restarting the service or severing existing connections.
+* **Profiles** (`Services/Xray/`): `Xray:ProfilesDir` holds one folder per profile, each with an Xray `config.json` and a `client-config.template`. `XrayProfileCatalog` lists and validates them on every request: VLESS inbounds with unique tags, something on port 443, no unfilled `YOUR_*` placeholders, a well-formed template whose `flow` matches the inbound, and readable certificate files.
+* **Runtime config:** `XrayRuntimeConfigBuilder` turns the active profile into the config Xray runs (`Xray:RuntimeDir/config.json`). It adds the stats service, the gRPC API inbound on 10085 and its routing rule, and per-user stats, then fills in every VLESS inbound's clients (`email` = the user's secret; `flow` = Vision on raw TCP with TLS/REALITY, or on any transport when the inbound uses VLESS Encryption). `structure.sha256` is the hash of that config without its clients.
+* **Switching:** `XrayRuntime` owns every change, under one lock. Activating a profile writes `config.next.json`, checks it with `xray run -test`, moves it into place, then writes `structure.sha256`. The Xray container's entrypoint, `deployables/xray-run.sh`, restarts Xray when that hash changes and writes `running.sha256` once Xray stays up. The app waits up to `Xray:RestartConfirmTimeoutSeconds` (default 30) for that file and a gRPC probe; otherwise it restores the previous config. `0` turns the confirmation off (CI, no launcher).
+* **User changes:** rewrite the runtime config's clients (the structure hash stays the same, so Xray isn't restarted), then use Xray's gRPC Handler API to add or remove the user on every VLESS inbound of the applied config, without severing other connections.
+* **Client links:** `VlessUrlGenerator` renders the applied profile's template (`{{secret}}`, `{{name}}`).
+* **Legacy mode:** when `Xray:ProfilesDir` is unset or missing (an old `docker-compose.yaml`), the app patches the clients of `Xray:InboundTag` in `Xray:ConfigPath` in place and builds REALITY links from the `Xray:*` settings, as before profiles existed.
 
 The sample config for VLESS + TCP + REALITY + Vision
 

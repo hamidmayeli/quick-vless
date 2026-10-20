@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using API.Auth;
 using API.Endpoints;
 using API.Services;
+using API.Services.Xray;
 using API.Storage;
 using Scalar.AspNetCore;
 
@@ -52,9 +53,15 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AdminRoles.SuperAdminPolicy, p => p.RequireRole(AdminRoles.SuperAdmin));
 
 // Xray services
+builder.Services.AddSingleton(sp => XrayOptions.From(sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddSingleton<XrayService>();
-builder.Services.AddSingleton<XrayConfigFileService>();
+builder.Services.AddSingleton<IXrayClient>(sp => sp.GetRequiredService<XrayService>());
+builder.Services.AddSingleton<XrayProfileCatalog>();
+builder.Services.AddSingleton<IXrayConfigTester, XrayBinaryConfigTester>();
+builder.Services.AddSingleton<IXrayRestartMonitor, FileRestartMonitor>();
+builder.Services.AddSingleton<XrayRuntime>();
 builder.Services.AddSingleton<VlessUrlGenerator>();
+builder.Services.AddSingleton<SettingsRepository>();
 
 // Hosted services
 builder.Services.AddHostedService<XrayConfigSyncService>();
@@ -82,6 +89,7 @@ api.MapAdminsEndpoints();
 api.MapUsersEndpoints();
 api.MapConfigEndpoints();
 api.MapUsageEndpoints();
+api.MapXrayEndpoints();
 
 // SPA fallback
 app.MapFallbackToFile("index.html");

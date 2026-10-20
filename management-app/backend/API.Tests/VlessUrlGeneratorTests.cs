@@ -5,7 +5,8 @@ namespace API.Tests;
 
 public class VlessUrlGeneratorTests
 {
-    private static VlessUrlGenerator CreateGenerator(string host = "example.com", string port = "443",
+    // Legacy mode: the link is built from Xray:* settings, exactly as before profiles existed.
+    private static LegacyVlessUrl CreateGenerator(string host = "example.com", string port = "443",
         string publicKey = "TEST_PK", string shortId = "abc123", string sni = "www.microsoft.com")
     {
         var config = new ConfigurationBuilder()
@@ -19,7 +20,39 @@ public class VlessUrlGeneratorTests
                 ["Xray:Fingerprint"] = "chrome",
             })
             .Build();
-        return new VlessUrlGenerator(config);
+        return new LegacyVlessUrl(config);
+    }
+
+    [Fact]
+    public void Generate_Legacy_MatchesTheLinkBuiltBeforeProfiles()
+    {
+        var url = CreateGenerator(host: "vpn.example.com", publicKey: "pk", shortId: "a1b2").Generate("uuid-1", "My User");
+
+        Assert.Equal(
+            "vless://uuid-1@vpn.example.com:443?type=tcp&security=reality&pbk=pk&fp=chrome&sni=www.microsoft.com&sid=a1b2&spx=%2F&flow=xtls-rprx-vision#My%20User",
+            url);
+    }
+
+    [Fact]
+    public void Render_FillsSecretAndEncodedName()
+    {
+        var url = VlessUrlGenerator.Render("vless://{{secret}}@host:443?type=ws#{{name}}", "uuid-1", "Ann & Bob");
+
+        Assert.Equal("vless://uuid-1@host:443?type=ws#Ann%20%26%20Bob", url);
+    }
+
+    [Fact]
+    public void Render_AllowsSpacesInsidePlaceholders()
+    {
+        Assert.Equal("vless://s@h#n", VlessUrlGenerator.Render("vless://{{ secret }}@h#{{ name }}", "s", "n"));
+    }
+
+    [Fact]
+    public void Render_MultiLineTemplate_ReturnsOneLinkPerNonEmptyLine()
+    {
+        var links = VlessUrlGenerator.Render("vless://{{secret}}@a#{{name}}\r\n\n  vless://{{secret}}@b#{{name}}  \n", "s", "n");
+
+        Assert.Equal("vless://s@a#n\nvless://s@b#n", links);
     }
 
     [Fact]

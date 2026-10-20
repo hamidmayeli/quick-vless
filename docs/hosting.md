@@ -20,7 +20,7 @@ You need a domain where the management UI will be hosted (e.g. `manage.example.c
 2. Create an **A record** pointing your chosen hostname to the server's public IPv4 address.
 3. Wait for DNS to propagate before running the installer — Caddy uses ACME HTTP-01 challenges to issue a TLS certificate, and the challenge requires the domain to resolve to this server.
 
-> **Note:** The Xray VPN does not need a domain. The `XRAY_SNI` setting (`www.microsoft.com` by default) is the domain that Xray *impersonates* using TLS Reality — it is a domain you do not own, chosen because it has a valid TLS certificate on port 443. Do not set `XRAY_SNI` to your own domain.
+> **Note:** The Xray VPN does not need a domain. The `XRAY_SNI` setting (`dl.google.com` by default) is the domain that Xray *impersonates* using TLS Reality — it is a domain you do not own, chosen because it has a valid TLS certificate on port 443. Do not set `XRAY_SNI` to your own domain.
 
 ## Firewall Configuration
 
@@ -63,6 +63,28 @@ curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/
   | sudo bash -s -- --domain manage.example.com
 ```
 
+#### Sample from branch
+
+```bash
+read -rsp 'Cloudflare API token: ' CF_API_TOKEN && export CF_API_TOKEN && echo
+
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/the-branch-name/install.sh \
+  | sudo --preserve-env=CF_API_TOKEN bash -s -- \
+      --domain manage.example.com \
+      --cf-domain cdn.example.com \
+      --branch the-branch-name \
+      --image-tag pr-21
+
+unset CF_API_TOKEN
+```
+
+Later to update to use main
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
+  | sudo bash -s -- --domain manage.example.com --upgrade --branch main --image-tag latest
+```
+
 Deployment files are written to `./easy-xray/` in the current directory.
 
 ### Clone-based install (alternative)
@@ -70,24 +92,56 @@ Deployment files are written to `./easy-xray/` in the current directory.
 If you prefer to inspect the code before running it, clone the repository first:
 
 ```bash
-git clone https://github.com/hamidmayeli/easy-xray.git
-cd easy-xray
+git clone https://github.com/hamidmayeli/quick-vless.git
+cd quick-vless
 ./install.sh --domain manage.example.com
 ```
 
 When run from the cloned directory, deployment files go into the `deployables/` subdirectory.
 
+### Installing from a branch
+
+To try a branch before it is merged, take `install.sh` from that branch **and** pass the same branch to `--branch`. Every deployment file (the manifest, `docker-compose.yaml`, the scripts and the profiles) is then downloaded from it:
+
+```bash
+BRANCH=my-feature
+curl -fsSL "https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/$BRANCH/install.sh" \
+  | sudo bash -s -- --domain manage.example.com --branch "$BRANCH"
+```
+
+`--branch` is needed because a script piped from `curl` can't tell which URL it came from. It is saved in `.env` as `INSTALL_BRANCH`, so later runs and `--upgrade` keep using that branch. Pass `--branch main` to go back.
+
+From a clone, check the branch out instead. The script detects it, so `--upgrade` downloads from the same branch:
+
+```bash
+git clone -b my-feature https://github.com/hamidmayeli/quick-vless.git
+cd quick-vless
+./install.sh --domain manage.example.com
+```
+
+The branch only decides the deployment files. The app runs from the `hamidmayeli/quick-vless` Docker image, which is `latest` (built from `main`) unless you pass `--image-tag`. If the branch changes the app, use the image built from it. A pull request build publishes `pr-<number>`:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/$BRANCH/install.sh" \
+  | sudo bash -s -- --domain manage.example.com --branch "$BRANCH" --image-tag pr-17
+```
+
+The script warns when the branch isn't `main` but the image is still `latest`. The tag is saved in `.env` as `APP_IMAGE_TAG`, and the daily `update.sh` keeps pulling that tag.
+
 ### What the script does
 
-1. Downloads `docker-compose.yaml`, `Caddyfile`, `Dockerfile.caddy`, and `xray/config.json` into the deploy directory (skipped if files are already present).
+1. Downloads the files listed in `manifest.txt` into the deploy directory, from `--branch` (default `main`): `docker-compose.yaml`, `Caddyfile`, `Dockerfile.caddy`, `update.sh`, `xray-run.sh`, and the profile folders in `xray/`. Skipped if the files are already present (see [Upgrading](upgrading.md) for `--upgrade`).
 2. Verifies Docker, Docker Compose, openssl, and curl are installed.
-3. Generates a JWT signing secret, an Xray Reality key pair, and a short ID — all automatically.
-4. Auto-detects the server's public IP address (used in the vless:// URLs given to users).
-5. Writes a `.env` file in the deploy directory with all configuration (permissions 600).
-6. Patches `xray/config.json` with the generated private key and short ID.
+3. Generates a JWT signing secret, an Xray Reality key pair, a short ID, a VLESS Encryption key pair, and random WebSocket and XHTTP paths — all automatically.
+4. Writes a `.env` file in the deploy directory with all configuration (permissions 600).
+5. With `--cf-domain`, installs the Cloudflare Origin certificate into the `tls/` folder of each Cloudflare profile, creating it through the Cloudflare API when you pass an API token.
+6. Fills in the `YOUR_*` placeholders in every profile's `config.json` and `client-config.template`.
 7. Pulls the Docker images.
 8. Starts all services with `docker compose up -d`.
 9. Polls `http://localhost` until the management UI responds.
+10. With `--cf-domain`, checks that the hostname is proxied by Cloudflare (warnings only — see [Cloudflare Setup](#cloudflare-setup)).
+
+The address in the REALITY `vless://` links is `--host`, which defaults to `--domain`. The script does not detect the server's IP; pass `--host <ip>` to use an IP address instead.
 
 On success, the management UI is available at `https://manage.example.com`.
 
@@ -163,17 +217,127 @@ There is no password reset in the UI. To let an admin (including the super admin
 3. Click **Copy Config URL** next to the user. Share that URL with them.
 4. The user opens the URL in their VLESS-compatible client (v2rayN, Shadowrocket, sing-box, etc.) or scans the QR code shown on the **Config** page.
 
+The config URL always returns the link of the **active profile**, so it stays the same when the super admin switches profiles. Clients that use it as a subscription pick up the new link when they refresh it.
+
+## Connection Profiles
+
+A profile is one way of serving VPN users. Each profile is a folder in `<deploy-dir>/xray/` holding:
+
+| File | Contents |
+|------|----------|
+| `config.json` | An Xray config with at least one `vless` inbound. Users are added to every `vless` inbound. |
+| `client-config.template` | The `vless://` link users get, with `{{secret}}` (the user's UUID) and `{{name}}` filled in by the app. |
+
+Three profiles ship with easy-xray:
+
+| Profile | Transport | Needs |
+|---------|-----------|-------|
+| `vless-reality` | VLESS + TCP + REALITY + Vision. Clients connect straight to the server and look like visits to `XRAY_SNI`. | Nothing extra — the default. |
+| `vless-cf-xhttp` | VLESS Encryption + Vision over XHTTP + TLS, through Cloudflare's network. Useful when the server's IP is blocked. **The recommended Cloudflare profile.** | A hostname on Cloudflare and an Origin certificate — see [Cloudflare Setup](#cloudflare-setup). Clients with a recent Xray core. |
+| `vless-cf-ws` | VLESS over WebSocket + TLS, through Cloudflare's network. | The same as `vless-cf-xhttp`. Kept for clients that don't support XHTTP or VLESS Encryption. |
+
+Only one profile is active at a time. To switch, open the **Profiles** page as the super admin and click **Activate**. The app first checks the profile with `xray run -test`, then restarts Xray with it. Active connections drop for a few seconds, and users must refresh their config URL to get the new link. If Xray doesn't confirm the restart within 30 seconds, the app puts the previous profile back.
+
+The Profiles page lists every folder in `xray/`, and explains why a profile can't be activated yet (for example, a placeholder `install.sh` hasn't filled in, or a missing certificate file). After editing a profile's files by hand, click **Re-apply** on the active profile. See [Writing your own profile](configuration.md#writing-your-own-profile) to add one.
+
+## Cloudflare Setup
+
+The Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws`, send VPN traffic through Cloudflare. Clients connect to Cloudflare, and Cloudflare connects to your server. Both use the same hostname and the same Origin certificate, so setting up Cloudflare once enables both.
+
+### Which Cloudflare profile
+
+| | `vless-cf-xhttp` (recommended) | `vless-cf-ws` |
+|---|---|---|
+| Transport | XHTTP (`packet-up` mode, designed for CDNs) | WebSocket — Xray 26 logs that it is deprecated in favour of XHTTP |
+| What Cloudflare can read | Nothing useful: VLESS Encryption keeps the VLESS traffic (user IDs, destinations) opaque, although Cloudflare terminates TLS | Cloudflare terminates TLS, so it sees the VLESS traffic in clear |
+| Flow | XTLS Vision, which VLESS Encryption makes possible over XHTTP | None — "VLESS without flow" is deprecated in Xray |
+| Clients | A recent Xray-core-based app (e.g. a current v2rayN or v2rayNG) that supports XHTTP and VLESS Encryption (`mlkem768x25519plus`) | Any VLESS client with WebSocket support |
+
+If some users' apps can't connect with `vless-cf-xhttp`, activate `vless-cf-ws` instead. Both work with the same Cloudflare setup.
+
+### Hostnames
+
+You need two hostnames, not two registered domains. Two subdomains of one domain whose DNS is on Cloudflare are enough:
+
+| Hostname | Cloudflare DNS record | Used by |
+|----------|-----------------------|---------|
+| `manage.example.com` (`--domain`, and `--host` by default) | **DNS only** (grey cloud) → server IP | The management UI, and the address REALITY clients connect to |
+| `cdn.example.com` (`--cf-domain`) | **Proxied** (orange cloud) → server IP | The Cloudflare profiles |
+
+- Keep the management hostname DNS only: Caddy gets its certificate from Let's Encrypt, and REALITY can't pass through Cloudflare.
+- Keep the Cloudflare hostname one level deep (`cdn.example.com`, not `ws.cdn.example.com`). Cloudflare's free edge certificate only covers first-level subdomains.
+- If your domain's DNS isn't on Cloudflare, either move its nameservers to Cloudflare, or use a second domain that is on Cloudflare for the Cloudflare hostname.
+
+### Cloudflare settings
+
+1. **DNS:** create the Cloudflare hostname's A record and turn on **Proxied**.
+2. **SSL/TLS → Overview:** set the encryption mode to **Full (strict)**.
+3. **Network:** make sure **WebSockets** is on (it is by default) if you use `vless-cf-ws`.
+
+Nothing else is needed for XHTTP. Cloudflare connects to the server over HTTP/1.1, and `vless-cf-xhttp` only offers HTTP/1.1 to it. This is deliberate: Xray's XHTTP server picks HTTP/1.1 or HTTP/2 from the first protocol it advertises, not per connection, and offering only HTTP/1.1 keeps Cloudflare on that even if **HTTP/2 to Origin** is turned on. Clients still use HTTP/2 to Cloudflare.
+
+### The Origin certificate
+
+Cloudflare connects to your server over TLS, so the server needs a certificate for the Cloudflare hostname. The script installs it into the `tls/` folder of every Cloudflare profile. A Cloudflare **Origin CA** certificate is free and valid for up to 15 years. Only Cloudflare trusts it, which is all this profile needs: clients only ever see Cloudflare's own certificate.
+
+**Option A — let the script create it (recommended).** Create an API token, and the script asks Cloudflare for a certificate covering `--cf-domain`:
+
+1. In Cloudflare, open **My Profile → API Tokens → Create Token → Create Custom Token**.
+2. Add the permission **Zone → SSL and Certificates → Edit**.
+3. Under **Zone Resources**, choose **Include → Specific zone →** your domain.
+4. Create the token and copy it.
+
+```bash
+read -rsp 'Cloudflare API token: ' CF_API_TOKEN && export CF_API_TOKEN   # typed, not saved in history
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
+  | sudo --preserve-env=CF_API_TOKEN bash -s -- --domain manage.example.com --cf-domain cdn.example.com
+unset CF_API_TOKEN
+```
+
+How the token is handled:
+
+- **It is used once.** The script doesn't store it in `.env` or anywhere else, and passes it to `curl` through a temporary file so it doesn't appear in the process list.
+- **Prefer the `CF_API_TOKEN` environment variable** over `--cf-api-token TOKEN`, which would leave the token in your shell history.
+- **You can delete it afterwards** in the Cloudflare dashboard.
+
+How the certificate is made and reused:
+
+- **The private key never leaves the server.** It is generated on the server, and Cloudflare only receives a signing request.
+- **Re-runs reuse the installed certificate.** A new certificate is only requested when the installed one doesn't cover `--cf-domain`, or expires within 30 days.
+
+**Option B — create it yourself.** In Cloudflare, open **SSL/TLS → Origin Server → Create Certificate**. Keep the default hostnames (`example.com` and `*.example.com`; one certificate covers every first-level subdomain), choose a validity of up to 15 years, and save the certificate and the private key as two files:
+
+```bash
+./install.sh --domain manage.example.com --cf-domain cdn.example.com \
+  --cf-origin-cert origin.pem --cf-origin-key origin.key
+```
+
+Either way, this works on a new server and on an existing install (re-run with the same `--domain`). The script refuses a certificate that doesn't match its key or doesn't cover `--cf-domain`. On an existing install, it restarts Xray when the certificate changes.
+
+The same run also fills in the Cloudflare profiles. For `vless-cf-xhttp` it generates a VLESS Encryption key pair and a random XHTTP path, saved in `.env` like the REALITY keys. Then open the **Profiles** page and activate `vless-cf-xhttp` (or `vless-cf-ws`).
+
+At the end, the script requests `https://cdn.example.com/` once and warns if something is off:
+
+| Warning | Meaning |
+|---------|---------|
+| Could not open `https://cdn.example.com` | Cloudflare's edge certificate isn't valid for the hostname: it is more than one level deep, or the zone isn't active on Cloudflare yet. |
+| Not proxied by Cloudflare | The DNS record is grey. VPN clients would reach the server directly, see the Origin certificate, and fail. Turn on the orange cloud. |
+| Cloudflare answered 525 or 526 | Only checked while a Cloudflare profile is active: Cloudflare couldn't complete TLS with the server (525) or rejected its certificate (526). Check the Origin certificate files and the Full (strict) mode. |
+
 ## Data Storage
 
-All persistent data lives in a named Docker volume `quick-vless_app-data`, mounted at `/data` inside the management app container:
+Persistent data lives in `<deploy-dir>/data/`, bind-mounted into the containers:
 
-| Path | Contents |
+| Path on the host | Contents |
 |------|----------|
-| `/data/users.json` | VPN user accounts (name, UUID, quota, expiry, enabled, `created_by` admin) |
-| `/data/admins.json` | Management UI admin accounts (role, hashed password — `null` while pending first login) |
-| `/data/usage_history/` | Daily bandwidth snapshots in CSV format (`YYYYMMDD.csv`) |
+| `data/app/users.json` | VPN user accounts (name, UUID, quota, expiry, enabled, `created_by` admin) |
+| `data/app/admins.json` | Management UI admin accounts (role, hashed password — `null` while pending first login) |
+| `data/app/settings.json` | The active profile chosen on the Profiles page |
+| `data/app/usage_history/` | Daily bandwidth snapshots in CSV format (`YYYYMMDD.csv`) |
+| `data/xray/` | The config Xray runs, generated by the app from the active profile — don't edit it |
+| `data/caddy/` | Caddy's certificates and state |
 
-The Xray configuration template lives in `xray/config.json` inside the deploy directory on the host and is bind-mounted into both the `xray` and `app` containers.
+The profiles live in `<deploy-dir>/xray/`. They are mounted read-only into both the `xray` and `app` containers at `/etc/xray/profiles`. They contain the REALITY private key and the Cloudflare Origin key, so treat that folder like `.env`.
 
 > **Deploy directory:** `./easy-xray/` when installed via curl, `./deployables/` when installed from a clone. The commands below use `<deploy-dir>` as a placeholder — substitute the correct path for your setup.
 
@@ -197,23 +361,21 @@ docker compose logs -f app
 
 ## Backup
 
-Back up the `app-data` volume and the deploy directory (which contains `.env` and `xray/config.json`).
+Back up `data/app/` (users, admins, settings, usage) and the configuration: `.env` and the `xray/` profile folders, which hold your keys and certificates.
 
 ```bash
 cd <deploy-dir>
 
-# Backup data volume
-docker run --rm \
-  -v quick-vless_app-data:/data \
-  -v "$(pwd)":/backup \
-  ubuntu \
-  tar czf /backup/easy-xray-data-$(date +%Y%m%d).tar.gz /data
+# User data (stop the app first so the files are consistent)
+docker compose stop app
+sudo tar czf ~/easy-xray-data-$(date +%Y%m%d).tar.gz data/app
+docker compose start app
 
-# Backup deploy directory (contains .env and xray config — keep this secure)
-tar czf ~/easy-xray-config-$(date +%Y%m%d).tar.gz .env xray/config.json
+# Configuration (contains secrets — keep this secure)
+sudo tar czf ~/easy-xray-config-$(date +%Y%m%d).tar.gz .env xray
 ```
 
-Store backups off the server (object storage, another VPS, your own machine).
+Store backups off the server (object storage, another VPS, your own machine). `data/xray/` and `data/caddy/` don't need backing up: the app regenerates the Xray config, and Caddy re-issues its certificate.
 
 ## Restore from Backup
 
@@ -221,11 +383,9 @@ Store backups off the server (object storage, another VPS, your own machine).
 cd <deploy-dir>
 docker compose down
 
-docker run --rm \
-  -v quick-vless_app-data:/data \
-  -v "$(pwd)":/backup \
-  ubuntu \
-  sh -c "rm -rf /data/* && tar xzf /backup/easy-xray-data-YYYYMMDD.tar.gz -C /"
+sudo rm -rf data/app
+sudo tar xzf ~/easy-xray-data-YYYYMMDD.tar.gz
+sudo tar xzf ~/easy-xray-config-YYYYMMDD.tar.gz   # only if .env or xray/ were lost
 
 docker compose up -d
 ```
