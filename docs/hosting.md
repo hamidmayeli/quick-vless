@@ -228,17 +228,33 @@ A profile is one way of serving VPN users. Each profile is a folder in `<deploy-
 | `config.json` | An Xray config with at least one `vless` inbound. Users are added to every `vless` inbound. |
 | `client-config.template` | The `vless://` link users get, with `{{secret}}` (the user's UUID) and `{{name}}` filled in by the app. |
 
-Three profiles ship with easy-xray:
+Five profiles ship with easy-xray:
 
 | Profile | Transport | Needs |
 |---------|-----------|-------|
 | `vless-reality` | VLESS + TCP + REALITY + Vision. Clients connect straight to the server and look like visits to `XRAY_SNI`. | Nothing extra — the default. |
+| `vless-xhttp-tls` | VLESS Encryption + Vision over XHTTP + TLS. Clients connect directly to the server, without Cloudflare. | A DNS-only VPN hostname and a Let's Encrypt certificate; see [Direct TLS profiles](#direct-tls-profiles). Recent Xray clients. |
+| `vless-ws-tls` | VLESS over WebSocket + TLS. Clients connect directly to the server, without Cloudflare. | A DNS-only VPN hostname and a Let's Encrypt certificate; see [Direct TLS profiles](#direct-tls-profiles). |
 | `vless-cf-xhttp` | VLESS Encryption + Vision over XHTTP + TLS, through Cloudflare's network. Useful when the server's IP is blocked. **The recommended Cloudflare profile.** | A hostname on Cloudflare and an Origin certificate — see [Cloudflare Setup](#cloudflare-setup). Clients with a recent Xray core. |
 | `vless-cf-ws` | VLESS over WebSocket + TLS, through Cloudflare's network. | The same as `vless-cf-xhttp`. Kept for clients that don't support XHTTP or VLESS Encryption. |
 
 Only one profile is active at a time. To switch, open the **Profiles** page as the super admin and click **Activate**. The app first checks the profile with `xray run -test`, then restarts Xray with it. Active connections drop for a few seconds, and users must refresh their config URL to get the new link. If Xray doesn't confirm the restart within 30 seconds, the app puts the previous profile back.
 
 The Profiles page lists every folder in `xray/`, and explains why a profile can't be activated yet (for example, a placeholder `install.sh` hasn't filled in, or a missing certificate file). After editing a profile's files by hand, click **Re-apply** on the active profile. See [Writing your own profile](configuration.md#writing-your-own-profile) to add one.
+
+## Direct TLS Profiles
+
+The direct TLS profiles connect to the server itself; their DNS record must be **DNS only**, not proxied. Use a hostname distinct from the management hostname because Caddy routes the management SNI to the UI. For example, use `manage.example.com` for `--domain` and `vpn.example.com` for `--vpn-domain`, both pointing to the server.
+
+```bash
+sudo ./install.sh --domain manage.example.com --vpn-domain vpn.example.com
+```
+
+The installer serves Let's Encrypt HTTP-01 challenges through Caddy's webroot, then copies the certificate into each direct TLS profile. It installs a daily Certbot renewal cron job and a deploy hook that updates both profile copies and restarts Xray only when the certificate renews. Caddy stays online during issuance and renewal. Port 80 must be reachable from the internet, and `vpn.example.com` must resolve directly to this server.
+
+After installation, activate `vless-ws-tls` or `vless-xhttp-tls` on the **Profiles** page. To make one active on first start, add `--profile vless-ws-tls` or `--profile vless-xhttp-tls` to the install command.
+
+For an existing deployment, include `--upgrade` with the same `--domain` so the Caddy webroot route, Compose mount, and new profiles are downloaded before certificate issuance.
 
 ## Cloudflare Setup
 

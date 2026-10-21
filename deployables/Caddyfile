@@ -39,5 +39,16 @@ https://{$MANAGEMENT_DOMAIN}:8443 {
 
 # HTTP-01 ACME challenges + redirect to HTTPS
 :80 {
-  redir https://{host}{uri} permanent
+  @acme {
+    host {$XRAY_VPN_DOMAIN}
+    path /.well-known/acme-challenge/*
+  }
+  handle @acme {
+    root * /var/www/certbot
+    file_server
+  }
+
+  handle {
+    redir https://{host}{uri} permanent
+  }
 }

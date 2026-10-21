@@ -5,6 +5,7 @@ docker-compose.yaml
 Caddyfile
 Dockerfile.caddy
 update.sh
+renew-vpn-certificate.sh
 xray-run.sh
 xray/vless-reality/config.json
 xray/vless-reality/client-config.template
@@ -12,3 +13,7 @@ xray/vless-cf-ws/config.json
 xray/vless-cf-ws/client-config.template
 xray/vless-cf-xhttp/config.json
 xray/vless-cf-xhttp/client-config.template
+xray/vless-ws-tls/config.json
+xray/vless-ws-tls/client-config.template
+xray/vless-xhttp-tls/config.json
+xray/vless-xhttp-tls/client-config.template

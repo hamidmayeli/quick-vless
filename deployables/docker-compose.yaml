@@ -64,8 +64,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy/data:/data
       - ./data/caddy/config:/config
+      - ./data/acme:/var/www/certbot:ro
     environment:
       - MANAGEMENT_DOMAIN=${MANAGEMENT_DOMAIN}
+      - XRAY_VPN_DOMAIN=${XRAY_VPN_DOMAIN:-disabled.invalid}
 
 networks:
   vpn:

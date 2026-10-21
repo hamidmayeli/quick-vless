@@ -23,6 +23,9 @@ info() { echo "[$(date '+%H:%M:%S')] INFO  $*"; }
 warn() { echo "[$(date '+%H:%M:%S')] WARN  $*" >&2; }
 error(){ echo "[$(date '+%H:%M:%S')] ERROR $*" >&2; }
 die()  { error "$*"; exit 1; }
+valid_hostname() {
+  [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$ ]]
+}
 
 # ------------------------------------------------------------
 # Usage
@@ -45,6 +48,9 @@ Required:
 Optional:
   --host HOST               Server IP/domain in REALITY vless:// URLs
                             (default: same as --domain)
+  --vpn-domain DOMAIN       DNS-only hostname for direct VLESS+WS and XHTTP+TLS
+                            profiles. Gets a Let's Encrypt certificate via Caddy's
+                            HTTP-01 webroot; must differ from --domain and --host
   --profile NAME            Xray profile active on first start: a folder in xray/
                             (default: vless-reality). Later, the super admin
                             switches profiles on the Profiles page.
@@ -91,6 +97,7 @@ Steps (in execution order; * = runs every time):
   migrate_legacy_layout   * Move an old xray/config.json to xray/vless-reality/
   install_prerequisites     Install Docker Engine + openssl + curl via apt
                             (no-op on non-apt systems)
+  install_vpn_prerequisites With --vpn-domain: install certbot and cron via apt
   check_prerequisites       Verify docker, docker compose (V2), openssl, curl
   generate_secrets        * Fill in any missing secrets/keys
   write_env_file          * Write \$DEPLOY_DIR/.env (chmod 600)
@@ -99,9 +106,12 @@ Steps (in execution order; * = runs every time):
                             every Cloudflare profile
   write_xray_profiles     * Fill in the YOUR_* placeholders of every profile
   pull_images               docker compose pull
+  install_vpn_certificate * With --vpn-domain: issue/renew the Let's Encrypt
+                            certificate and copy it to both direct TLS profiles
   start_services            docker compose up -d (and restart Xray if its
                             certificate changed)
   setup_cron_jobs           Install crontab entry: update.sh daily at 3:00 AM
+                            and Certbot renewal daily at 3:30 AM when configured
   verify_health             Poll http://localhost until ready (warn on timeout)
   verify_cloudflare       * With --cf-domain: check the hostname is proxied by
                             Cloudflare (warns only)
@@ -126,6 +136,7 @@ PARAM_XRAY_SHORT_ID=""
 PARAM_XRAY_SNI="dl.google.com"
 PARAM_XRAY_FINGERPRINT="chrome"
 PARAM_PROFILE=""
+PARAM_VPN_DOMAIN=""
 PARAM_CF_DOMAIN=""
 PARAM_CF_ORIGIN_CERT=""
 PARAM_CF_ORIGIN_KEY=""
@@ -165,6 +176,8 @@ while [[ $# -gt 0 ]]; do
     --xray-fingerprint)   PARAM_XRAY_FINGERPRINT="${2:-}";  shift 2 ;;
     --profile=*)        PARAM_PROFILE="${1#*=}";           shift ;;
     --profile)          PARAM_PROFILE="${2:-}";            shift 2 ;;
+    --vpn-domain=*)     PARAM_VPN_DOMAIN="${1#*=}";        shift ;;
+    --vpn-domain)       PARAM_VPN_DOMAIN="${2:-}";         shift 2 ;;
     --cf-domain=*)      PARAM_CF_DOMAIN="${1#*=}";         shift ;;
     --cf-domain)        PARAM_CF_DOMAIN="${2:-}";          shift 2 ;;
     --cf-origin-cert=*) PARAM_CF_ORIGIN_CERT="${1#*=}";    shift ;;
@@ -204,6 +217,9 @@ fi
 if [[ -n "$PARAM_CF_DOMAIN" && ! "$PARAM_CF_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
   die "--cf-domain must be a hostname such as cdn.example.com."
 fi
+if [[ -n "$PARAM_VPN_DOMAIN" ]] && ! valid_hostname "$PARAM_VPN_DOMAIN"; then
+  die "--vpn-domain must be a hostname such as vpn.example.com."
+fi
 if [[ -n "$PARAM_CF_API_TOKEN" && -n "$PARAM_CF_ORIGIN_CERT" ]]; then
   die "Use either --cf-api-token or --cf-origin-cert/--cf-origin-key, not both."
 fi
@@ -237,6 +253,8 @@ else
   DEPLOY_DIR="$PWD/easy-xray"
 fi
 
+mkdir -p "$DEPLOY_DIR"
+DEPLOY_DIR="$(cd "$DEPLOY_DIR" && pwd)"
 STATE_FILE="$DEPLOY_DIR/.install-state"
 
 info "Script dir : $SCRIPT_DIR"
@@ -276,6 +294,7 @@ load_env_if_present() {
   [[ -z "$PARAM_XRAY_SHORT_ID"     ]] && PARAM_XRAY_SHORT_ID="$(_env_val XRAY_REALITY_SHORT_ID)"
   [[ -z "$PARAM_HOST"              ]] && PARAM_HOST="$(_env_val XRAY_HOST)"
   [[ -z "$PARAM_PROFILE"           ]] && PARAM_PROFILE="$(_env_val XRAY_DEFAULT_PROFILE)"
+  [[ -z "$PARAM_VPN_DOMAIN"        ]] && PARAM_VPN_DOMAIN="$(_env_val XRAY_VPN_DOMAIN)"
   [[ -z "$PARAM_CF_DOMAIN"         ]] && PARAM_CF_DOMAIN="$(_env_val XRAY_CF_DOMAIN)"
   [[ -z "$PARAM_WS_ID"             ]] && PARAM_WS_ID="$(_env_val XRAY_WS_ID)"
   [[ -z "$PARAM_XHTTP_ID"          ]] && PARAM_XHTTP_ID="$(_env_val XRAY_XHTTP_ID)"
@@ -296,6 +315,20 @@ if [[ -z "$PARAM_BRANCH" && -n "$SCRIPT_DIR" ]] && command -v git &>/dev/null; t
 fi
 
 load_env_if_present
+
+# The direct TLS profiles use a separate DNS-only SNI so Caddy can continue
+# routing --domain to the management UI.
+if [[ -n "$PARAM_VPN_DOMAIN" ]]; then
+  valid_hostname "$PARAM_VPN_DOMAIN" \
+    || die "XRAY_VPN_DOMAIN must be a hostname such as vpn.example.com."
+  for other in "$PARAM_DOMAIN" "$PARAM_HOST" "$PARAM_CF_DOMAIN"; do
+    [[ -z "$other" || "${PARAM_VPN_DOMAIN,,}" != "${other,,}" ]] \
+      || die "--vpn-domain ($PARAM_VPN_DOMAIN) must differ from --domain, --host, and --cf-domain."
+  done
+fi
+if [[ "$PARAM_PROFILE" == "vless-ws-tls" || "$PARAM_PROFILE" == "vless-xhttp-tls" ]]; then
+  [[ -n "$PARAM_VPN_DOMAIN" ]] || die "--profile $PARAM_PROFILE needs --vpn-domain."
+fi
 
 # A re-run may take the Cloudflare hostname from .env, so check this only now.
 if [[ -z "$PARAM_CF_DOMAIN" ]]; then
@@ -400,7 +433,7 @@ step_download_files() {
   done < "$manifest"
   rm -f "$manifest"
 
-  chmod +x "$DEPLOY_DIR/update.sh" "$DEPLOY_DIR/xray-run.sh"
+  chmod +x "$DEPLOY_DIR/update.sh" "$DEPLOY_DIR/xray-run.sh" "$DEPLOY_DIR/renew-vpn-certificate.sh"
   info "All deployment files downloaded."
 }
 
@@ -498,7 +531,29 @@ https://download.docker.com/linux/${distro} ${codename} stable" \
 }
 
 # ------------------------------------------------------------
-# 3. check_prerequisites
+# 3. install_vpn_prerequisites
+# ------------------------------------------------------------
+step_install_vpn_prerequisites() {
+  [[ -n "$PARAM_VPN_DOMAIN" ]] || return 0
+
+  local pkgs=()
+  command -v certbot &>/dev/null || pkgs+=("certbot")
+  command -v crontab &>/dev/null || pkgs+=("cron")
+  [[ ${#pkgs[@]} -gt 0 ]] || return 0
+
+  if ! command -v apt-get &>/dev/null; then
+    info "Not an apt-based system — Certbot and cron must be installed manually."
+    return 0
+  fi
+
+  info "Installing VPN certificate dependencies: ${pkgs[*]}..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq "${pkgs[@]}"
+}
+
+# ------------------------------------------------------------
+# 4. check_prerequisites
 # ------------------------------------------------------------
 step_check_prerequisites() {
   local missing=()
@@ -533,6 +588,11 @@ step_check_prerequisites() {
     missing+=("curl")
   fi
 
+  if [[ -n "$PARAM_VPN_DOMAIN" ]]; then
+    command -v certbot &>/dev/null || missing+=("certbot")
+    command -v crontab &>/dev/null || missing+=("crontab")
+  fi
+
   if [[ ${#missing[@]} -gt 0 ]]; then
     error "Missing prerequisites:"
     for m in "${missing[@]}"; do
@@ -545,7 +605,7 @@ step_check_prerequisites() {
 }
 
 # ------------------------------------------------------------
-# 4. generate_secrets
+# 5. generate_secrets
 # ------------------------------------------------------------
 
 # Prints "PRIVATE PUBLIC": a raw X25519 key pair, base64url without padding, as Xray uses for
@@ -657,6 +717,7 @@ XRAY_REALITY_SHORT_ID=${PARAM_XRAY_SHORT_ID}
 XRAY_SNI=${PARAM_XRAY_SNI}
 XRAY_FINGERPRINT=${PARAM_XRAY_FINGERPRINT}
 XRAY_DEFAULT_PROFILE=${PARAM_PROFILE}
+XRAY_VPN_DOMAIN=${PARAM_VPN_DOMAIN}
 XRAY_CF_DOMAIN=${PARAM_CF_DOMAIN}
 XRAY_WS_ID=${PARAM_WS_ID}
 XRAY_XHTTP_ID=${PARAM_XHTTP_ID}
@@ -729,7 +790,7 @@ install_pem_pair() {
   local src_cert="$1" src_key="$2" cert="$3" key="$4"
   mkdir -p "$(dirname "$cert")"
   if ! cmp -s "$src_cert" "$cert" 2>/dev/null || ! cmp -s "$src_key" "$key" 2>/dev/null; then
-    CF_CERT_CHANGED=true
+    XRAY_CERT_CHANGED=true
   fi
   if [[ "$src_cert" != "$cert" ]]; then cp "$src_cert" "$cert"; fi
   if [[ "$src_key"  != "$key"  ]]; then cp "$src_key"  "$key";  fi
@@ -864,8 +925,64 @@ step_install_cf_certificate() {
   info "Origin certificate in place for: $(for d in "${dirs[@]}"; do basename "$d"; done | tr '\n' ' ')"
 }
 
+# Installs a Certbot deploy hook that copies only this install's VPN certificate.
+install_vpn_certificate_hook() {
+  local hook_dir="${EASY_XRAY_CERTBOT_HOOK_DIR:-/etc/letsencrypt/renewal-hooks/deploy}"
+  local hook_id hook_file
+  hook_id="$(printf '%s' "$DEPLOY_DIR" | sha256sum | cut -c1-16)"
+  hook_file="$hook_dir/quick-vless-$hook_id.sh"
+  mkdir -p "$hook_dir"
+  printf '#!/usr/bin/env bash\nset -euo pipefail\nexec /usr/bin/env bash %q\n' \
+    "$DEPLOY_DIR/renew-vpn-certificate.sh" > "$hook_file"
+  chmod 700 "$hook_file"
+}
+
 # ------------------------------------------------------------
-# 7. write_xray_profiles
+# 7. install_vpn_certificate
+# ------------------------------------------------------------
+step_install_vpn_certificate() {
+  if [[ -z "$PARAM_VPN_DOMAIN" ]]; then
+    info "No --vpn-domain — the direct TLS profiles stay disabled."
+    return 0
+  fi
+
+  local profile cert key webroot
+  for profile in vless-ws-tls vless-xhttp-tls; do
+    [[ -f "$DEPLOY_DIR/xray/$profile/config.json" && -f "$DEPLOY_DIR/xray/$profile/client-config.template" ]] \
+      || die "Direct TLS profiles are missing. Re-run with --upgrade to download them."
+  done
+  [[ -f "$DEPLOY_DIR/renew-vpn-certificate.sh" ]] \
+    || die "Certificate renewal helper is missing. Re-run with --upgrade to download it."
+
+  webroot="$DEPLOY_DIR/data/acme"
+  mkdir -p "$webroot"
+
+  info "Starting Caddy for the HTTP-01 challenge on $PARAM_VPN_DOMAIN ..."
+  (cd "$DEPLOY_DIR" && docker compose up -d --no-deps caddy) \
+    || die "Could not start Caddy for the certificate challenge."
+  (cd "$DEPLOY_DIR" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile) \
+    || die "Could not reload Caddy with the ACME webroot route. Run install.sh --upgrade and try again."
+
+  certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+    --webroot --webroot-path "$webroot" --cert-name "$PARAM_VPN_DOMAIN" \
+    --domains "$PARAM_VPN_DOMAIN" --keep-until-expiring \
+    || die "Certbot could not issue or renew a certificate for $PARAM_VPN_DOMAIN. Verify DNS points directly to this server and port 80 is reachable."
+
+  cert="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/fullchain.pem"
+  key="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/privkey.pem"
+  check_certificate "$cert" "$key" "$PARAM_VPN_DOMAIN"
+
+  for profile in vless-ws-tls vless-xhttp-tls; do
+    install_pem_pair "$cert" "$key" \
+      "$DEPLOY_DIR/xray/$profile/tls/fullchain.pem" \
+      "$DEPLOY_DIR/xray/$profile/tls/privkey.pem"
+  done
+  install_vpn_certificate_hook
+  info "Let's Encrypt certificate installed for $PARAM_VPN_DOMAIN."
+}
+
+# ------------------------------------------------------------
+# 8. write_xray_profiles
 # ------------------------------------------------------------
 
 sed_escape() { printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'; }
@@ -881,6 +998,7 @@ patch_profile_file() {
     YOUR_SNI         "$PARAM_XRAY_SNI"
     YOUR_HOST        "$PARAM_HOST"
     YOUR_FINGERPRINT "$PARAM_XRAY_FINGERPRINT"
+    YOUR_VPN_DOMAIN "$PARAM_VPN_DOMAIN"
     YOUR_CF_DOMAIN   "$PARAM_CF_DOMAIN"
     YOUR_WS_ID       "$PARAM_WS_ID"
     YOUR_XHTTP_ID    "$PARAM_XHTTP_ID"
@@ -912,8 +1030,15 @@ step_write_xray_profiles() {
   [[ $count -gt 0 ]] || die "No profiles found in $DEPLOY_DIR/xray/."
   [[ -d "$DEPLOY_DIR/xray/$PARAM_PROFILE" ]] \
     || die "--profile $PARAM_PROFILE: there is no xray/$PARAM_PROFILE folder."
+  if [[ "$PARAM_PROFILE" == "vless-ws-tls" || "$PARAM_PROFILE" == "vless-xhttp-tls" ]]; then
+    [[ -n "$PARAM_VPN_DOMAIN" ]] || die "--profile $PARAM_PROFILE needs --vpn-domain."
+  fi
   if grep -qF 'YOUR_CF_DOMAIN' "$DEPLOY_DIR/xray/$PARAM_PROFILE/client-config.template" 2>/dev/null; then
     die "--profile $PARAM_PROFILE needs --cf-domain."
+  fi
+  if [[ "$PARAM_PROFILE" == "vless-ws-tls" || "$PARAM_PROFILE" == "vless-xhttp-tls" ]] \
+      && grep -qF 'YOUR_VPN_DOMAIN' "$DEPLOY_DIR/xray/$PARAM_PROFILE/client-config.template"; then
+    die "--profile $PARAM_PROFILE needs --vpn-domain."
   fi
   info "Profiles ready ($count found; the app reports any that still need values)."
 }
@@ -943,14 +1068,14 @@ step_start_services() {
   info "Services started."
 }
 
-# Xray reads certificates only when it starts, and replacing one doesn't change its config's
+# Xray reads certificates only when it starts, and replacing one doesn't change the config's
 # structure, so the app won't restart it. Do it here when an already running install got a new one.
 step_reload_xray() {
   # A container started by this run already loaded the new certificate.
-  if [[ "$CF_CERT_CHANGED" != true || "$XRAY_WAS_RUNNING" != true ]]; then
+  if [[ "$XRAY_CERT_CHANGED" != true || "$XRAY_WAS_RUNNING" != true ]]; then
     return 0
   fi
-  info "The Origin certificate changed — restarting Xray to load it ..."
+  info "A TLS certificate changed — restarting Xray to load it ..."
   (cd "$DEPLOY_DIR" && docker compose restart xray) \
     || warn "Could not restart Xray. Run 'docker compose restart xray' in $DEPLOY_DIR."
 }
@@ -968,15 +1093,29 @@ step_setup_cron_jobs() {
   local update_script="$DEPLOY_DIR/update.sh"
   local log_file="$DEPLOY_DIR/update.log"
   local cron_line="0 3 * * * $update_script >> $log_file 2>&1"
+  local certbot_bin="$(command -v certbot 2>/dev/null || true)"
+  local renewal_line=""
+  if [[ -n "$PARAM_VPN_DOMAIN" && -n "$certbot_bin" ]]; then
+    renewal_line="30 3 * * * $certbot_bin renew --quiet >> $DEPLOY_DIR/certbot-renew.log 2>&1 # easy-xray certificate renewal"
+  fi
 
-  info "Installing cron job for automatic daily updates..."
+  local current_crontab line
+  current_crontab="$(crontab -l 2>/dev/null || true)"
+  info "Installing cron jobs..."
 
-  crontab -l 2>/dev/null \
-    | grep -v -F "$update_script" \
-    | { cat; echo "$cron_line"; } \
-    | crontab -
+  {
+    while IFS= read -r line; do
+      [[ -z "$line" || "$line" == *"$update_script"* || "$line" == *"# easy-xray certificate renewal"* ]] && continue
+      printf '%s\n' "$line"
+    done <<< "$current_crontab"
+    printf '%s\n' "$cron_line"
+    [[ -z "$renewal_line" ]] || printf '%s\n' "$renewal_line"
+  } | crontab -
 
-  info "Cron job configured: daily at 3:00 AM → $update_script"
+  info "Daily update configured at 3:00 AM: $update_script"
+  if [[ -n "$renewal_line" ]]; then
+    info "Certbot renewal configured at 3:30 AM."
+  fi
 }
 
 # ------------------------------------------------------------
@@ -1066,13 +1205,14 @@ log "============================================================"
 UPGRADE_MODE=""
 [[ "$PARAM_UPGRADE" == true ]] && UPGRADE_MODE="always"
 
-CF_CERT_CHANGED=false
+XRAY_CERT_CHANGED=false
 XRAY_WAS_RUNNING=false
 
 run_step "download_files"          step_download_files          "$UPGRADE_MODE"
 run_step "migrate_legacy_layout"   step_migrate_legacy_layout   always
 run_step "install_prerequisites"   step_install_prerequisites
-run_step "check_prerequisites"     step_check_prerequisites
+run_step "install_vpn_prerequisites" step_install_vpn_prerequisites always
+run_step "check_prerequisites"     step_check_prerequisites     always
 run_step "generate_secrets"        step_generate_secrets        always
 run_step "write_env_file"          step_write_env_file          always
 run_step "install_cf_certificate"  step_install_cf_certificate  always
@@ -1082,9 +1222,10 @@ if command -v docker &>/dev/null \
     && [[ -n "$(cd "$DEPLOY_DIR" && docker compose ps -q --status running xray 2>/dev/null || true)" ]]; then
   XRAY_WAS_RUNNING=true
 fi
+run_step "install_vpn_certificate" step_install_vpn_certificate always
 run_step "start_services"          step_start_services          "$UPGRADE_MODE"
 run_step "reload_xray"             step_reload_xray             always
-run_step "setup_cron_jobs"         step_setup_cron_jobs
+run_step "setup_cron_jobs"         step_setup_cron_jobs         always
 run_step "verify_health"           step_verify_health
 run_step "verify_cloudflare"       step_verify_cloudflare       always
 
@@ -1096,6 +1237,9 @@ echo "  First login: enter any username and password to create the super admin a
 echo "  Active profile on first start: ${PARAM_PROFILE} (switch it on the Profiles page)"
 if [[ -n "$PARAM_CF_DOMAIN" ]]; then
   echo "  Cloudflare profiles on ${PARAM_CF_DOMAIN}: $(cf_profile_dirs | xargs -r -n1 basename | tr '\n' ' ')"
+fi
+if [[ -n "$PARAM_VPN_DOMAIN" ]]; then
+  echo "  Direct TLS profiles on ${PARAM_VPN_DOMAIN}: vless-ws-tls vless-xhttp-tls"
 fi
 if [[ "$PARAM_BRANCH" != "main" || "$PARAM_IMAGE_TAG" != "latest" ]]; then
   echo "  Installed from branch ${PARAM_BRANCH} with app image tag ${PARAM_IMAGE_TAG}"
