@@ -9,7 +9,7 @@ test.describe('User management', () => {
   test.beforeEach(async ({ request }) => {
     // The super admin sees every user, so this wipes the whole user list.
     const token = await apiLogin(request, SUPER_ADMIN)
-    await request.put('/api/v1/settings', { headers: authHeader(token), data: { custom_domain: '' } })
+    await request.put('/api/v1/settings', { headers: authHeader(token), data: { domain_override: '' } })
     const usersRes = await request.get('/api/v1/users', { headers: authHeader(token) })
     const users = await usersRes.json()
     for (const user of users) {
@@ -30,16 +30,16 @@ test.describe('User management', () => {
     await expect(page.locator('text=No users yet')).toBeVisible()
   })
 
-  test('copies config URLs using the saved custom domain', async ({ page, request, context }) => {
+  test('copies config URLs using the saved domain override', async ({ page, request, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     const token = await apiLogin(request, SUPER_ADMIN)
-    const user = await createUser(request, token, 'CustomDomainUser')
+    const user = await createUser(request, token, 'DomainOverrideUser')
     await loginAndNavigate(page)
 
     await page.getByRole('button', { name: 'Settings' }).click()
-    await page.getByLabel('Custom domain').fill('links.example.com')
+    await page.getByLabel('Domain override').fill('links.example.com')
     await page.getByRole('button', { name: 'Save domain' }).click()
-    await expect(page.getByLabel('Custom domain')).toHaveValue('links.example.com')
+    await expect(page.getByLabel('Domain override')).toHaveValue('links.example.com')
     await page.getByRole('button', { name: 'Done' }).click()
 
     await page.getByRole('button', { name: 'Copy Config URL' }).click()

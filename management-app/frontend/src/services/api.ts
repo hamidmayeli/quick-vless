@@ -9,7 +9,7 @@ export interface ApiErrorBody {
 }
 
 export interface AppSettings {
-  custom_domain: string | null
+  domain_override: string | null
 }
 
 export class ApiError extends Error {
@@ -147,8 +147,8 @@ export const xrayApi = {
 export const settingsApi = {
   get: (): Promise<AppSettings> => request('/settings'),
 
-  update: (customDomain: string): Promise<AppSettings> =>
-    request('/settings', { method: 'PUT', body: JSON.stringify({ custom_domain: customDomain }) }),
+  update: (domainOverride: string): Promise<AppSettings> =>
+    request('/settings', { method: 'PUT', body: JSON.stringify({ domain_override: domainOverride }) }),
 }
 
 export const usageApi = {

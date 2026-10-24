@@ -24,21 +24,21 @@ public sealed class SettingsRepositoryTests : IDisposable
     {
         var settings = await CreateRepo().GetAsync();
         Assert.Null(settings.XrayActiveProfile);
-        Assert.Null(settings.CustomDomain);
+        Assert.Null(settings.DomainOverride);
     }
 
     [Fact]
     public async Task Update_RoundTripsAsSnakeCaseWithoutLeavingATempFile()
     {
         await CreateRepo().UpdateAsync(s => s.XrayActiveProfile = "vless-cf-ws");
-        await CreateRepo().UpdateAsync(s => s.CustomDomain = "vpn.example.com");
+        await CreateRepo().UpdateAsync(s => s.DomainOverride = "vpn.example.com");
 
         var settings = await CreateRepo().GetAsync();
         Assert.Equal("vless-cf-ws", settings.XrayActiveProfile);
-        Assert.Equal("vpn.example.com", settings.CustomDomain);
+        Assert.Equal("vpn.example.com", settings.DomainOverride);
         var json = await File.ReadAllTextAsync(SettingsPath);
         Assert.Contains("\"xray_active_profile\": \"vless-cf-ws\"", json);
-        Assert.Contains("\"custom_domain\": \"vpn.example.com\"", json);
+        Assert.Contains("\"domain_override\": \"vpn.example.com\"", json);
         Assert.Equal(new[] { "settings.json" }, Directory.GetFiles(_dir).Select(Path.GetFileName).ToArray());
     }
 }

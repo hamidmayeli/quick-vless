@@ -10,7 +10,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
   const [timeZone, setTimeZone] = useTimeZone()
-  const [customDomain, setCustomDomain] = useState('')
+  const [domainOverride, setDomainOverride] = useState('')
   const [domainLoaded, setDomainLoaded] = useState(false)
   const [savingDomain, setSavingDomain] = useState(false)
   const [domainError, setDomainError] = useState<string | null>(null)
@@ -18,20 +18,20 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
   useEffect(() => {
     if (!isSuperAdmin) return
     void settingsApi.get().then((settings) => {
-      setCustomDomain(settings.custom_domain ?? '')
+      setDomainOverride(settings.domain_override ?? '')
       setDomainLoaded(true)
     })
-      .catch(() => setDomainError('Could not load the custom domain setting.'))
+      .catch(() => setDomainError('Could not load the domain override setting.'))
   }, [isSuperAdmin])
 
   async function saveDomain() {
     setSavingDomain(true)
     setDomainError(null)
     try {
-      const settings = await settingsApi.update(customDomain.trim())
-      setCustomDomain(settings.custom_domain ?? '')
+      const settings = await settingsApi.update(domainOverride.trim())
+      setDomainOverride(settings.domain_override ?? '')
     } catch (error) {
-      setDomainError(error instanceof Error ? error.message : 'Could not save the custom domain.')
+      setDomainError(error instanceof Error ? error.message : 'Could not save the domain override.')
     } finally {
       setSavingDomain(false)
     }
@@ -84,7 +84,7 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
           {isSuperAdmin && (
             <div className={styles.section}>
               <label className={styles.field}>
-                <span className={styles.fieldLabel}>Custom domain</span>
+                <span className={styles.fieldLabel}>Domain override</span>
                 <span className={styles.fieldDescription}>Config links will use this host. Leave blank to use the current domain.</span>
                 <input
                   className={styles.input}
@@ -92,9 +92,9 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
                   inputMode="url"
                   autoComplete="url"
                   placeholder="vpn.example.com"
-                  value={customDomain}
+                  value={domainOverride}
                   disabled={!domainLoaded || savingDomain}
-                  onChange={(event) => { setCustomDomain(event.target.value); setDomainError(null) }}
+                  onChange={(event) => { setDomainOverride(event.target.value); setDomainError(null) }}
                 />
               </label>
               {domainError && <p className={styles.error} role="alert">{domainError}</p>}

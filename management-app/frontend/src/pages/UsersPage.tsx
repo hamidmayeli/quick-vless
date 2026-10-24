@@ -71,8 +71,8 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   async function handleCopyConfigUrl(userId: string) {
     setCopyError(null)
     try {
-      const { custom_domain: customDomain } = await settingsApi.get()
-      const origin = customDomain ? `https://${customDomain}` : window.location.origin
+      const { domain_override: domainOverride } = await settingsApi.get()
+      const origin = domainOverride ? `https://${domainOverride}` : window.location.origin
       await navigator.clipboard.writeText(`${origin}/api/v1/config/${userId}`)
       setCopiedId(userId)
       setTimeout(() => setCopiedId(null), 2000)

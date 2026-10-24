@@ -17,18 +17,18 @@ public sealed class SettingsIntegrationTests : IDisposable
     public void Dispose() => _factory.Dispose();
 
     [Fact]
-    public async Task UpdateSettings_PersistsCustomDomainAndReturnsItToAdmins()
+    public async Task UpdateSettings_PersistsDomainOverrideAndReturnsItToAdmins()
     {
-        var response = await _super.PutAsJsonAsync("/api/v1/settings", new { custom_domain = "  vpn.example.com/  " });
+        var response = await _super.PutAsJsonAsync("/api/v1/settings", new { domain_override = "  vpn.example.com/  " });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("vpn.example.com", (await response.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("custom_domain").GetString());
+            .GetProperty("domain_override").GetString());
 
         var admin = await TestAuth.CreateAdminClientAsync(_factory, _super, "alice");
         var settings = await admin.GetFromJsonAsync<JsonElement>("/api/v1/settings");
-        Assert.Equal("vpn.example.com", settings.GetProperty("custom_domain").GetString());
-        Assert.Contains("\"custom_domain\": \"vpn.example.com\"", await File.ReadAllTextAsync(Path.Combine(_factory.DataDir, "settings.json")));
+        Assert.Equal("vpn.example.com", settings.GetProperty("domain_override").GetString());
+        Assert.Contains("\"domain_override\": \"vpn.example.com\"", await File.ReadAllTextAsync(Path.Combine(_factory.DataDir, "settings.json")));
     }
 
     [Fact]
@@ -37,8 +37,8 @@ public sealed class SettingsIntegrationTests : IDisposable
         var admin = await TestAuth.CreateAdminClientAsync(_factory, _super, "alice");
 
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await admin.PutAsJsonAsync("/api/v1/settings", new { custom_domain = "vpn.example.com" })).StatusCode);
+            (await admin.PutAsJsonAsync("/api/v1/settings", new { domain_override = "vpn.example.com" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await _super.PutAsJsonAsync("/api/v1/settings", new { custom_domain = "https://vpn.example.com/path" })).StatusCode);
+            (await _super.PutAsJsonAsync("/api/v1/settings", new { domain_override = "https://vpn.example.com/path" })).StatusCode);
     }
 }

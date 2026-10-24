@@ -12,12 +12,12 @@ public static class SettingsEndpoints
         group.MapGet("/", async (SettingsRepository settings) =>
         {
             var current = await settings.GetAsync();
-            return Results.Ok(new SettingsResponse(current.CustomDomain));
+            return Results.Ok(new SettingsResponse(current.DomainOverride));
         });
 
         group.MapPut("/", async (UpdateSettingsRequest request, SettingsRepository settings) =>
         {
-            var domain = request.CustomDomain?.Trim();
+            var domain = request.DomainOverride?.Trim();
             if (!string.IsNullOrEmpty(domain))
             {
                 if (!Uri.TryCreate($"https://{domain}", UriKind.Absolute, out var uri)
@@ -30,12 +30,12 @@ public static class SettingsEndpoints
                 domain = uri.Authority;
             }
 
-            await settings.UpdateAsync(current => current.CustomDomain = string.IsNullOrEmpty(domain) ? null : domain);
+            await settings.UpdateAsync(current => current.DomainOverride = string.IsNullOrEmpty(domain) ? null : domain);
             return Results.Ok(new SettingsResponse(domain));
         }).RequireAuthorization(AdminRoles.SuperAdminPolicy);
     }
 
-    public record UpdateSettingsRequest(string? CustomDomain);
+    public record UpdateSettingsRequest(string? DomainOverride);
 
-    public record SettingsResponse(string? CustomDomain);
+    public record SettingsResponse(string? DomainOverride);
 }
