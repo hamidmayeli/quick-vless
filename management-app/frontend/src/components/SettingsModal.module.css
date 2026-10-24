@@ -111,6 +111,33 @@
   transition: border-color 0.15s;
 }
 
+.input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  background: #0f0f23;
+  color: #e8e8f0;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #7c7cff;
+}
+
+.error {
+  margin: 0;
+  color: #ff8a8a;
+  font-size: 0.85rem;
+}
+
+.doneBtn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .select:focus {
   border-color: #7c7cff;
 }

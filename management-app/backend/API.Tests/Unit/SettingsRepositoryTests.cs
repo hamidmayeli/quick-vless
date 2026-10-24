@@ -22,16 +22,23 @@ public sealed class SettingsRepositoryTests : IDisposable
     [Fact]
     public async Task Get_NoFile_ReturnsDefaults()
     {
-        Assert.Null((await CreateRepo().GetAsync()).XrayActiveProfile);
+        var settings = await CreateRepo().GetAsync();
+        Assert.Null(settings.XrayActiveProfile);
+        Assert.Null(settings.CustomDomain);
     }
 
     [Fact]
     public async Task Update_RoundTripsAsSnakeCaseWithoutLeavingATempFile()
     {
         await CreateRepo().UpdateAsync(s => s.XrayActiveProfile = "vless-cf-ws");
+        await CreateRepo().UpdateAsync(s => s.CustomDomain = "vpn.example.com");
 
-        Assert.Equal("vless-cf-ws", (await CreateRepo().GetAsync()).XrayActiveProfile);
-        Assert.Contains("\"xray_active_profile\": \"vless-cf-ws\"", await File.ReadAllTextAsync(SettingsPath));
+        var settings = await CreateRepo().GetAsync();
+        Assert.Equal("vless-cf-ws", settings.XrayActiveProfile);
+        Assert.Equal("vpn.example.com", settings.CustomDomain);
+        var json = await File.ReadAllTextAsync(SettingsPath);
+        Assert.Contains("\"xray_active_profile\": \"vless-cf-ws\"", json);
+        Assert.Contains("\"custom_domain\": \"vpn.example.com\"", json);
         Assert.Equal(new[] { "settings.json" }, Directory.GetFiles(_dir).Select(Path.GetFileName).ToArray());
     }
 }

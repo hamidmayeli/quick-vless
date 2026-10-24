@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import type { User } from '@/types'
 import { formatQuota, parseQuota } from '@/services/quota'
+import { settingsApi } from '@/services/api'
 import styles from './UsersPage.module.css'
 
 type UserForm = Omit<User, 'id' | 'secret' | 'quota'> & { quota: string }
@@ -26,6 +27,7 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [form, setForm] = useState<UserForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
   function openCreate() {
@@ -67,10 +69,16 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   }
 
   async function handleCopyConfigUrl(userId: string) {
-    const url = `${window.location.origin}/api/v1/config/${userId}`
-    await navigator.clipboard.writeText(url)
-    setCopiedId(userId)
-    setTimeout(() => setCopiedId(null), 2000)
+    setCopyError(null)
+    try {
+      const { custom_domain: customDomain } = await settingsApi.get()
+      const origin = customDomain ? `https://${customDomain}` : window.location.origin
+      await navigator.clipboard.writeText(`${origin}/api/v1/config/${userId}`)
+      setCopiedId(userId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch {
+      setCopyError('Could not copy the config URL.')
+    }
   }
 
   if (loading) return <p className={styles.state}>Loading users…</p>
@@ -160,6 +168,7 @@ export function UsersPage({ showOwner }: UsersPageProps) {
         </table>
       </div>
 
+      {copyError && <p className={styles.error} role="alert">{copyError}</p>}
       {users.length === 0 && <p className={styles.state}>No users yet. Add one above.</p>}
     </div>
   )
