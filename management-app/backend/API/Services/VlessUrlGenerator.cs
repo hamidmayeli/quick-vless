@@ -3,7 +3,7 @@ using API.Services.Xray;
 
 namespace API.Services;
 
-/// <summary>Builds the client link(s) for a user from the applied profile's client-config.template.</summary>
+/// <summary>Builds the client links defined by the applied profile's template, regardless of transport.</summary>
 public sealed partial class VlessUrlGenerator(IConfiguration config, XrayRuntime runtime)
 {
     private readonly LegacyVlessUrl _legacy = new(config);

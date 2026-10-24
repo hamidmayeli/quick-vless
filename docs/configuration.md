@@ -17,11 +17,12 @@ All configuration is supplied through environment variables in `deployables/.env
 | `XRAY_REALITY_SHORT_ID` | Yes | Auto-generated | An 8-character hex string (e.g. `a1b2c3d4`). Part of the REALITY handshake. |
 | `XRAY_SNI` | No | `dl.google.com` | The domain that Xray impersonates. Must be a public domain with a valid TLS certificate on port 443. Do not use your own domain here. |
 | `XRAY_FINGERPRINT` | No | `chrome` | TLS client fingerprint to mimic. Options: `chrome`, `firefox`, `safari`, `ios`, `android`, `edge`, `360`, `qq`, `random`, `randomized`. |
+| `XRAY_VPN_DOMAIN` | No | — | DNS-only hostname for direct TLS profiles `vless-ws-tls` and `vless-xhttp-tls`. Must differ from `MANAGEMENT_DOMAIN` and point directly to this server. `install.sh` obtains and renews a Let's Encrypt certificate. |
 | `XRAY_CF_DOMAIN` | No | — | Hostname proxied by Cloudflare for the Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws` (e.g. `cdn.example.com`). Empty keeps them disabled. See [Cloudflare Setup](hosting.md#cloudflare-setup). |
-| `XRAY_WS_ID` | No | Auto-generated | WebSocket path of the `vless-cf-ws` profile, without the leading slash (e.g. `ws-3f9c…`). Random per server. |
-| `XRAY_XHTTP_ID` | No | Auto-generated | XHTTP path of the `vless-cf-xhttp` profile, without the leading slash (e.g. `xh-8a1d…`). Random per server. |
-| `XRAY_VLESS_ENC_PRIVATE_KEY` | No | Auto-generated | VLESS Encryption private key of `vless-cf-xhttp` (X25519, the same format as the REALITY keys). Goes into its `config.json`. Keep it secret. |
-| `XRAY_VLESS_ENC_PUBLIC_KEY` | No | Auto-generated | The matching public key (Xray calls it the "password"). Goes into its `client-config.template`. |
+| `XRAY_WS_ID` | No | Auto-generated | WebSocket path shared by `vless-cf-ws` and `vless-ws-tls`, without the leading slash. Random per server. |
+| `XRAY_XHTTP_ID` | No | Auto-generated | XHTTP path shared by `vless-cf-xhttp` and `vless-xhttp-tls`, without the leading slash. Random per server. |
+| `XRAY_VLESS_ENC_PRIVATE_KEY` | No | Auto-generated | VLESS Encryption private key shared by the XHTTP profiles (X25519, the same format as the REALITY keys). Goes into their `config.json` files. Keep it secret. |
+| `XRAY_VLESS_ENC_PUBLIC_KEY` | No | Auto-generated | The matching public key (Xray calls it the "password"). Goes into the XHTTP profiles' `client-config.template` files. |
 
 The `XRAY_*` values above (except `XRAY_DEFAULT_PROFILE`) aren't read by the running containers. `install.sh` writes them into the profile files and keeps them in `.env` so a re-run fills in the same values.
 

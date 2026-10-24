@@ -166,6 +166,7 @@ public sealed partial class XrayProfileCatalog(XrayOptions options)
 
     private static string InstallHint(string placeholder) => placeholder switch
     {
+        "YOUR_VPN_DOMAIN" => "run install.sh with --vpn-domain",
         "YOUR_CF_DOMAIN" or "YOUR_WS_ID" or "YOUR_XHTTP_ID" => "run install.sh with --cf-domain",
         "YOUR_PRIVATE_KEY" or "YOUR_PUBLIC_KEY" or "YOUR_SHORT_ID" or "YOUR_SNI" or "YOUR_HOST" or "YOUR_FINGERPRINT"
             => "run install.sh to fill in the REALITY settings",

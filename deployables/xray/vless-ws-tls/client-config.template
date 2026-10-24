@@ -1,0 +1,1 @@
+vless://{{secret}}@YOUR_VPN_DOMAIN:443?encryption=none&security=tls&sni=YOUR_VPN_DOMAIN&fp=YOUR_FINGERPRINT&alpn=http%2F1.1&type=ws&host=YOUR_VPN_DOMAIN&path=%2FYOUR_WS_ID#{{name}}

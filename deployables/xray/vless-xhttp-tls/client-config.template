@@ -1,0 +1,1 @@
+vless://{{secret}}@YOUR_VPN_DOMAIN:443?encryption=mlkem768x25519plus.native.0rtt.YOUR_VLESS_ENC_PUBLIC_KEY&flow=xtls-rprx-vision&security=tls&sni=YOUR_VPN_DOMAIN&fp=YOUR_FINGERPRINT&alpn=h2&type=xhttp&host=YOUR_VPN_DOMAIN&path=%2FYOUR_XHTTP_ID&mode=packet-up#{{name}}

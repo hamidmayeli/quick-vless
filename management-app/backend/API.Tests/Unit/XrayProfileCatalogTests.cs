@@ -165,6 +165,7 @@ public sealed class XrayProfileCatalogTests : IDisposable
     }
 
     [Theory]
+    [InlineData("YOUR_VPN_DOMAIN", "run install.sh with --vpn-domain")]
     [InlineData("YOUR_CF_DOMAIN", "run install.sh with --cf-domain")]
     [InlineData("YOUR_WS_ID", "run install.sh with --cf-domain")]
     [InlineData("YOUR_XHTTP_ID", "run install.sh with --cf-domain")]
