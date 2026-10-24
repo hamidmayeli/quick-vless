@@ -3,6 +3,7 @@ import { useUsers } from '@/hooks/useUsers'
 import type { User } from '@/types'
 import { formatQuota, parseQuota } from '@/services/quota'
 import { settingsApi } from '@/services/api'
+import { Notification, type NotificationVariant } from '@/components/Notification'
 import styles from './UsersPage.module.css'
 
 type UserForm = Omit<User, 'id' | 'secret' | 'quota'> & { quota: string }
@@ -27,7 +28,7 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [form, setForm] = useState<UserForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [copyError, setCopyError] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{ variant: NotificationVariant; message: string } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
   function openCreate() {
@@ -69,15 +70,28 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   }
 
   async function handleCopyConfigUrl(userId: string) {
-    setCopyError(null)
+    setNotification(null)
+    let domainOverride: string | null = null
+    let usedFallback = false
     try {
-      const { domain_override: domainOverride } = await settingsApi.get()
-      const origin = domainOverride ? `https://${domainOverride}` : window.location.origin
+      domainOverride = (await settingsApi.get()).domain_override
+    } catch {
+      usedFallback = true
+    }
+
+    const origin = domainOverride ? `https://${domainOverride}` : window.location.origin
+    try {
       await navigator.clipboard.writeText(`${origin}/api/v1/config/${userId}`)
       setCopiedId(userId)
       setTimeout(() => setCopiedId(null), 2000)
+      if (usedFallback) {
+        setNotification({
+          variant: 'warning',
+          message: 'The domain override could not be loaded. The config URL was copied using the current domain.',
+        })
+      }
     } catch {
-      setCopyError('Could not copy the config URL.')
+      setNotification({ variant: 'error', message: 'Could not copy the config URL to the clipboard.' })
     }
   }
 
@@ -168,7 +182,13 @@ export function UsersPage({ showOwner }: UsersPageProps) {
         </table>
       </div>
 
-      {copyError && <p className={styles.error} role="alert">{copyError}</p>}
+      {notification && (
+        <Notification
+          variant={notification.variant}
+          message={notification.message}
+          onDismiss={() => setNotification(null)}
+        />
+      )}
       {users.length === 0 && <p className={styles.state}>No users yet. Add one above.</p>}
     </div>
   )

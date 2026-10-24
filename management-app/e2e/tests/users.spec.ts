@@ -48,6 +48,20 @@ test.describe('User management', () => {
       .toBe(`https://links.example.com/api/v1/config/${user.id}`)
   })
 
+  test('copies with the current domain and warns when the domain override cannot load', async ({ page, request, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const token = await apiLogin(request, SUPER_ADMIN)
+    const user = await createUser(request, token, 'DomainOverrideFallbackUser')
+    await loginAndNavigate(page)
+    await page.route('**/api/v1/settings', (route) => route.abort())
+
+    await page.getByRole('button', { name: 'Copy Config URL' }).click()
+
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`${new URL(page.url()).origin}/api/v1/config/${user.id}`)
+    await expect(page.getByRole('alert')).toContainText('copied using the current domain')
+  })
+
   test('refreshes users when the page becomes visible again', async ({ page }) => {
     let userRequests = 0
     page.on('request', (request) => {

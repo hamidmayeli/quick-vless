@@ -7,13 +7,16 @@ import { UsersPage } from '@/pages/UsersPage'
 import { UsagePage } from '@/pages/UsagePage'
 import { AdminsPage } from '@/pages/AdminsPage'
 import { ProfilesPage } from '@/pages/ProfilesPage'
+import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt'
 
 export function App() {
   const { isAuthenticated, session, isSuperAdmin, login, logout } = useAuth()
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <>
+      <PwaUpdatePrompt />
+      <BrowserRouter>
+        <Routes>
         <Route
           path="/login"
           element={isAuthenticated ? <Navigate to="/users" replace /> : <LoginPage onLogin={login} />}
@@ -32,7 +35,8 @@ export function App() {
           <Route path="/profiles" element={isSuperAdmin ? <ProfilesPage /> : <Navigate to="/users" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </>
   )
 }
