@@ -1,6 +1,7 @@
 .notification {
   position: fixed;
-  top: 1rem;
+  top: auto;
+  bottom: 1rem;
   right: 1rem;
   z-index: 200;
   display: flex;
@@ -62,4 +63,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .notification { animation: none; }
+}
+
+@media (max-width: 600px) {
+  .notification {
+    bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
 }

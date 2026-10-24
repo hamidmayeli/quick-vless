@@ -30,6 +30,27 @@ test.describe('User management', () => {
     await expect(page.locator('text=No users yet')).toBeVisible()
   })
 
+  test('mobile navigation opens all menu items from the bottom bar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loginAndNavigate(page)
+
+    const nav = page.locator('nav')
+    await expect(nav).toHaveCSS('position', 'fixed')
+    await expect(nav).toHaveCSS('bottom', '0px')
+    await page.getByRole('button', { name: 'Open menu' }).click()
+    await expect(nav.getByRole('button', { name: 'Close menu' })).toHaveAttribute('aria-expanded', 'true')
+    for (const item of ['Users', 'Usage', 'Admins', 'Profiles']) {
+      await expect(page.getByRole('link', { name: item })).toBeVisible()
+    }
+    await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByTestId('signed-in-as')).toHaveText('admin · Super admin')
+    await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible()
+
+    await page.getByRole('link', { name: 'Usage' }).click()
+    await expect(page).toHaveURL(/\/usage$/)
+    await expect(page.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
   test('copies config URLs using the saved domain override', async ({ page, request, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     const token = await apiLogin(request, SUPER_ADMIN)
