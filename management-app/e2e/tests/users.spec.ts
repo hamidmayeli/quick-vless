@@ -52,8 +52,8 @@ test.describe('User management', () => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     const token = await apiLogin(request, SUPER_ADMIN)
     const user = await createUser(request, token, 'DomainOverrideFallbackUser')
-    await loginAndNavigate(page)
     await page.route('**/api/v1/settings', (route) => route.abort())
+    await loginAndNavigate(page)
 
     await page.getByRole('button', { name: 'Copy Config URL' }).click()
 

@@ -144,11 +144,22 @@ export const xrayApi = {
     request('/xray/active-profile/reapply', { method: 'POST' }),
 }
 
-export const settingsApi = {
-  get: (): Promise<AppSettings> => request('/settings'),
+let cachedSettings: AppSettings | null = null
 
-  update: (domainOverride: string): Promise<AppSettings> =>
-    request('/settings', { method: 'PUT', body: JSON.stringify({ domain_override: domainOverride }) }),
+export const settingsApi = {
+  get: async (): Promise<AppSettings> => {
+    const settings = await request<AppSettings>('/settings')
+    cachedSettings = settings
+    return settings
+  },
+
+  getCached: (): AppSettings | null => cachedSettings,
+
+  update: async (domainOverride: string): Promise<AppSettings> => {
+    const settings = await request<AppSettings>('/settings', { method: 'PUT', body: JSON.stringify({ domain_override: domainOverride }) })
+    cachedSettings = settings
+    return settings
+  },
 }
 
 export const usageApi = {

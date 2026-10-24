@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import type { User } from '@/types'
 import { formatQuota, parseQuota } from '@/services/quota'
@@ -16,6 +16,44 @@ const EMPTY_FORM: UserForm = {
   enabled: true,
 }
 
+function copyTextToClipboard(text: string): Promise<void> {
+  let clipboardWrite: Promise<void> | undefined
+  try {
+    clipboardWrite = navigator.clipboard?.writeText(text)
+  } catch {
+    clipboardWrite = undefined
+  }
+
+  const fallbackCopied = copyWithExecCommand(text)
+  if (clipboardWrite) {
+    return clipboardWrite.catch((error: unknown) => {
+      if (fallbackCopied) return
+      throw error
+    })
+  }
+  return fallbackCopied ? Promise.resolve() : Promise.reject(new Error('Clipboard access is unavailable.'))
+}
+
+function copyWithExecCommand(text: string): boolean {
+  const input = document.createElement('textarea')
+  input.value = text
+  input.setAttribute('readonly', '')
+  input.style.position = 'fixed'
+  input.style.opacity = '0'
+  document.body.append(input)
+  input.select()
+  input.setSelectionRange(0, text.length)
+  let copied: boolean
+  try {
+    copied = document.execCommand('copy')
+  } catch {
+    input.remove()
+    return false
+  }
+  input.remove()
+  return copied
+}
+
 interface UsersPageProps {
   // The super admin sees every admin's users, so show who created each one.
   showOwner: boolean
@@ -30,6 +68,10 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ variant: NotificationVariant; message: string } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void settingsApi.get().catch(() => undefined)
+  }, [])
 
   function openCreate() {
     setForm(EMPTY_FORM)
@@ -71,17 +113,11 @@ export function UsersPage({ showOwner }: UsersPageProps) {
 
   async function handleCopyConfigUrl(userId: string) {
     setNotification(null)
-    let domainOverride: string | null = null
-    let usedFallback = false
+    const settings = settingsApi.getCached()
+    const usedFallback = settings === null
+    const origin = settings?.domain_override ? `https://${settings.domain_override}` : window.location.origin
     try {
-      domainOverride = (await settingsApi.get()).domain_override
-    } catch {
-      usedFallback = true
-    }
-
-    const origin = domainOverride ? `https://${domainOverride}` : window.location.origin
-    try {
-      await navigator.clipboard.writeText(`${origin}/api/v1/config/${userId}`)
+      await copyTextToClipboard(`${origin}/api/v1/config/${userId}`)
       setCopiedId(userId)
       setTimeout(() => setCopiedId(null), 2000)
       if (usedFallback) {
