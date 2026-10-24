@@ -49,7 +49,7 @@ export function Layout({ onLogout, username, isSuperAdmin }: LayoutProps) {
       <main className={styles.main}>
         <Outlet />
       </main>
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal isSuperAdmin={isSuperAdmin} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

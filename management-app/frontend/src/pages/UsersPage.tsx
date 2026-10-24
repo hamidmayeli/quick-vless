@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import type { User } from '@/types'
 import { formatQuota, parseQuota } from '@/services/quota'
+import { settingsApi } from '@/services/api'
+import { Notification, type NotificationVariant } from '@/components/Notification'
 import styles from './UsersPage.module.css'
 
 type UserForm = Omit<User, 'id' | 'secret' | 'quota'> & { quota: string }
@@ -26,6 +28,7 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [form, setForm] = useState<UserForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{ variant: NotificationVariant; message: string } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
   function openCreate() {
@@ -67,10 +70,29 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   }
 
   async function handleCopyConfigUrl(userId: string) {
-    const url = `${window.location.origin}/api/v1/config/${userId}`
-    await navigator.clipboard.writeText(url)
-    setCopiedId(userId)
-    setTimeout(() => setCopiedId(null), 2000)
+    setNotification(null)
+    let domainOverride: string | null = null
+    let usedFallback = false
+    try {
+      domainOverride = (await settingsApi.get()).domain_override
+    } catch {
+      usedFallback = true
+    }
+
+    const origin = domainOverride ? `https://${domainOverride}` : window.location.origin
+    try {
+      await navigator.clipboard.writeText(`${origin}/api/v1/config/${userId}`)
+      setCopiedId(userId)
+      setTimeout(() => setCopiedId(null), 2000)
+      if (usedFallback) {
+        setNotification({
+          variant: 'warning',
+          message: 'The domain override could not be loaded. The config URL was copied using the current domain.',
+        })
+      }
+    } catch {
+      setNotification({ variant: 'error', message: 'Could not copy the config URL to the clipboard.' })
+    }
   }
 
   if (loading) return <p className={styles.state}>Loading users…</p>
@@ -160,6 +182,13 @@ export function UsersPage({ showOwner }: UsersPageProps) {
         </table>
       </div>
 
+      {notification && (
+        <Notification
+          variant={notification.variant}
+          message={notification.message}
+          onDismiss={() => setNotification(null)}
+        />
+      )}
       {users.length === 0 && <p className={styles.state}>No users yet. Add one above.</p>}
     </div>
   )

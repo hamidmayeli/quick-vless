@@ -9,6 +9,7 @@ test.describe('User management', () => {
   test.beforeEach(async ({ request }) => {
     // The super admin sees every user, so this wipes the whole user list.
     const token = await apiLogin(request, SUPER_ADMIN)
+    await request.put('/api/v1/settings', { headers: authHeader(token), data: { domain_override: '' } })
     const usersRes = await request.get('/api/v1/users', { headers: authHeader(token) })
     const users = await usersRes.json()
     for (const user of users) {
@@ -27,6 +28,38 @@ test.describe('User management', () => {
   test('users page shows empty state message', async ({ page }) => {
     await loginAndNavigate(page)
     await expect(page.locator('text=No users yet')).toBeVisible()
+  })
+
+  test('copies config URLs using the saved domain override', async ({ page, request, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const token = await apiLogin(request, SUPER_ADMIN)
+    const user = await createUser(request, token, 'DomainOverrideUser')
+    await loginAndNavigate(page)
+
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page.getByLabel('Domain override').fill('links.example.com')
+    await page.getByRole('button', { name: 'Save domain' }).click()
+    await expect(page.getByLabel('Domain override')).toHaveValue('links.example.com')
+    await page.getByRole('button', { name: 'Done' }).click()
+
+    await page.getByRole('button', { name: 'Copy Config URL' }).click()
+
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`https://links.example.com/api/v1/config/${user.id}`)
+  })
+
+  test('copies with the current domain and warns when the domain override cannot load', async ({ page, request, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const token = await apiLogin(request, SUPER_ADMIN)
+    const user = await createUser(request, token, 'DomainOverrideFallbackUser')
+    await loginAndNavigate(page)
+    await page.route('**/api/v1/settings', (route) => route.abort())
+
+    await page.getByRole('button', { name: 'Copy Config URL' }).click()
+
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`${new URL(page.url()).origin}/api/v1/config/${user.id}`)
+    await expect(page.getByRole('alert')).toContainText('copied using the current domain')
   })
 
   test('refreshes users when the page becomes visible again', async ({ page }) => {

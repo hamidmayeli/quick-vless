@@ -8,6 +8,10 @@ export interface ApiErrorBody {
   errors?: string[]
 }
 
+export interface AppSettings {
+  domain_override: string | null
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: ApiErrorBody | null
@@ -138,6 +142,13 @@ export const xrayApi = {
 
   reapply: (): Promise<{ active: string }> =>
     request('/xray/active-profile/reapply', { method: 'POST' }),
+}
+
+export const settingsApi = {
+  get: (): Promise<AppSettings> => request('/settings'),
+
+  update: (domainOverride: string): Promise<AppSettings> =>
+    request('/settings', { method: 'PUT', body: JSON.stringify({ domain_override: domainOverride }) }),
 }
 
 export const usageApi = {
