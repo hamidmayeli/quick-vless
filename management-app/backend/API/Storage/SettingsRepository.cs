@@ -5,6 +5,7 @@ namespace API.Storage;
 public sealed class AppSettings
 {
     public string? XrayActiveProfile { get; set; }
+    public string? DomainOverride { get; set; }
 }
 
 /// <summary>App-wide settings chosen in the UI, stored in settings.json.</summary>

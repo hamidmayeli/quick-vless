@@ -89,6 +89,7 @@ api.MapAdminsEndpoints();
 api.MapUsersEndpoints();
 api.MapConfigEndpoints();
 api.MapUsageEndpoints();
+api.MapSettingsEndpoints();
 api.MapXrayEndpoints();
 
 // SPA fallback
