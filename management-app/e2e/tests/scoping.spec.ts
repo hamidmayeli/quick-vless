@@ -46,12 +46,15 @@ test.describe('Per-admin scoping', () => {
     await expect(page.getByRole('cell', { name: userA.name })).toHaveCount(0)
   })
 
-  test('super admin sees every admin\'s users with an Owner column', async ({ page }) => {
+  test('super admin sees each admin\'s users in a separate group', async ({ page }) => {
     await openAs(page, SUPER_ADMIN, '/users')
 
-    await expect(page.getByRole('columnheader', { name: 'Owner' })).toBeVisible()
-    await expect(page.getByRole('row', { name: new RegExp(userA.name) })).toContainText(adminA.username)
-    await expect(page.getByRole('row', { name: new RegExp(userB.name) })).toContainText(adminB.username)
+    const groupA = page.locator('tbody').filter({ has: page.getByRole('row', { name: adminA.username }) })
+    const groupB = page.locator('tbody').filter({ has: page.getByRole('row', { name: adminB.username }) })
+    await expect(groupA.getByRole('cell', { name: userA.name })).toBeVisible()
+    await expect(groupA.getByRole('cell', { name: userB.name })).toHaveCount(0)
+    await expect(groupB.getByRole('cell', { name: userB.name })).toBeVisible()
+    await expect(groupB.getByRole('cell', { name: userA.name })).toHaveCount(0)
   })
 
   test('normal admins do not get an Owner column', async ({ page }) => {

@@ -2,6 +2,14 @@ import { test, expect } from '@playwright/test'
 import { SUPER_ADMIN, apiLogin, authHeader, openAs } from './helpers'
 
 test.describe('Usage page', () => {
+  test('usage page uses the available width on large screens', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 })
+    await openAs(page, SUPER_ADMIN, '/usage')
+
+    await expect.poll(() => page.locator('main').evaluate((main) => main.getBoundingClientRect().width))
+      .toBeGreaterThan(1200)
+  })
+
   test('usage page renders with no data', async ({ page }) => {
     await openAs(page, SUPER_ADMIN, '/usage')
     await expect(page.locator('h2')).toContainText(/usage/i)

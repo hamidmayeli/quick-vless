@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { SettingsModal } from './SettingsModal'
 import styles from './Layout.module.css'
 
@@ -10,6 +10,7 @@ interface LayoutProps {
 }
 
 export function Layout({ onLogout, username, isSuperAdmin }: LayoutProps) {
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -71,7 +72,7 @@ export function Layout({ onLogout, username, isSuperAdmin }: LayoutProps) {
           <button className={styles.logout} onClick={handleLogout}>Logout</button>
         </div>
       </nav>
-      <main className={styles.main}>
+      <main className={`${styles.main} ${pathname === '/usage' ? styles.mainWide : ''}`}>
         <Outlet />
       </main>
       {settingsOpen && <SettingsModal isSuperAdmin={isSuperAdmin} onClose={() => setSettingsOpen(false)} />}

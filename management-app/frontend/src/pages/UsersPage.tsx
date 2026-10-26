@@ -69,6 +69,17 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [notification, setNotification] = useState<{ variant: NotificationVariant; message: string } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const formOpen = creating || editing !== null
+  const userGroups: { owner: string | null; users: User[] }[] = showOwner
+    ? [...users.reduce((groups, user) => {
+        const owner = user.created_by ?? 'Unknown admin'
+        const group = groups.get(owner) ?? []
+        group.push(user)
+        groups.set(owner, group)
+        return groups
+      }, new Map<string, User[]>())]
+        .sort(([ownerA], [ownerB]) => ownerA.localeCompare(ownerB))
+        .map(([owner, groupedUsers]) => ({ owner, users: groupedUsers }))
+    : [{ owner: null, users }]
 
   useEffect(() => {
     void settingsApi.get().catch(() => undefined)
@@ -214,7 +225,6 @@ export function UsersPage({ showOwner }: UsersPageProps) {
           <thead>
             <tr>
               <th>Name</th>
-              {showOwner && <th>Owner</th>}
               <th>Quota</th>
               <th>Expiry</th>
               <th>Single conn.</th>
@@ -222,32 +232,38 @@ export function UsersPage({ showOwner }: UsersPageProps) {
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className={!u.enabled ? styles.disabled : ''}>
-                <td data-label="Name">{u.name}</td>
-                {showOwner && <td data-label="Owner">{u.created_by ?? '—'}</td>}
-                <td data-label="Quota">{formatQuota(u.quota)}</td>
-                <td data-label="Expiry">{u.expiry ?? '—'}</td>
-                <td data-label="Single conn.">{u.single_connection ? 'Yes' : 'No'}</td>
-                <td data-label="Status">
-                  <span className={u.enabled ? styles.badgeOn : styles.badgeOff}>
-                    {u.enabled ? 'Active' : 'Disabled'}
-                  </span>
-                </td>
-                <td data-label="Actions" className={styles.actions}>
-                  <button className={styles.btnSmall} onClick={() => openEdit(u)}>Edit</button>
-                  <button className={styles.btnSmall} onClick={() => toggle(u)}>
-                    {u.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  <button className={styles.btnSmall} onClick={() => void handleCopyConfigUrl(u.id)}>
-                    {copiedId === u.id ? 'Copied!' : 'Copy Config URL'}
-                  </button>
-                  <button className={`${styles.btnSmall} ${styles.danger}`} onClick={() => handleDelete(u.id)}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          {userGroups.map(({ owner, users: groupedUsers }) => (
+            <tbody key={owner ?? 'all-users'}>
+              {owner !== null && (
+                <tr className={styles.groupHeader}>
+                  <th scope="rowgroup" colSpan={6}>{owner}</th>
+                </tr>
+              )}
+              {groupedUsers.map((u) => (
+                <tr key={u.id} className={!u.enabled ? styles.disabled : ''}>
+                  <td data-label="Name">{u.name}</td>
+                  <td data-label="Quota">{formatQuota(u.quota)}</td>
+                  <td data-label="Expiry">{u.expiry ?? '—'}</td>
+                  <td data-label="Single conn.">{u.single_connection ? 'Yes' : 'No'}</td>
+                  <td data-label="Status">
+                    <span className={u.enabled ? styles.badgeOn : styles.badgeOff}>
+                      {u.enabled ? 'Active' : 'Disabled'}
+                    </span>
+                  </td>
+                  <td data-label="Actions" className={styles.actions}>
+                    <button className={styles.btnSmall} onClick={() => openEdit(u)}>Edit</button>
+                    <button className={styles.btnSmall} onClick={() => toggle(u)}>
+                      {u.enabled ? 'Disable' : 'Enable'}
+                    </button>
+                    <button className={styles.btnSmall} onClick={() => void handleCopyConfigUrl(u.id)}>
+                      {copiedId === u.id ? 'Copied!' : 'Copy Config URL'}
+                    </button>
+                    <button className={`${styles.btnSmall} ${styles.danger}`} onClick={() => handleDelete(u.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       </div>
 
