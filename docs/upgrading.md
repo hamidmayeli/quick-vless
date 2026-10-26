@@ -1,23 +1,46 @@
-# Upgrading and Maintenance
+# Updating and Maintenance
 
-## Upgrading to a New Version
+Commands below use `/path/to/easy-xray` as the deployment directory. Replace it with the path created during [installation](installation.md#choose-a-deployment-directory), such as `/root/easy-xray`.
 
-Back up your data before upgrading (see [Backup](#backup)).
+## Update the App Image
 
-The daily `update.sh` cron job already pulls new images. To also update the deployment files (`docker-compose.yaml`, `xray-run.sh`, new profiles…), re-run the installer with `--upgrade`, from the same directory and with the same `--domain`:
+The daily `update.sh` cron job pulls the app image selected by `APP_IMAGE_TAG` and recreates the containers. It does not refresh deployment files. To run the image update manually:
+
+```bash
+cd /path/to/easy-xray
+./update.sh
+```
+
+## Upgrade Deployment Files
+
+Back up your data first (see [Backup](#backup)). To refresh deployment files as well as the app image, rerun the installer with `--upgrade`. Run it from the same working directory used for installation, or specify the existing path with `--deploy-dir`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
-  | sudo bash -s -- --domain manage.example.com --upgrade
+  | sudo bash -s -- --upgrade
 ```
 
-The files come from the branch you installed from (`INSTALL_BRANCH` in `.env`, `main` by default). Pass `--branch` to change it — see [Installing from a branch](hosting.md#installing-from-a-branch).
+The installer uses the branch saved in `<deploy-dir>/.env` as `INSTALL_BRANCH` (`main` by default), and the image tag saved as `APP_IMAGE_TAG`. Existing values, including domains, are loaded from `.env`.
 
-`--upgrade` replaces the deployment files and keeps a `.bak` copy of each. It never overwrites a profile file in `xray/`; it only adds missing ones. Then it pulls the images and re-creates the containers. User data in `data/` is not affected.
+`--upgrade` backs up replaced non-profile deployment files as `.bak`, keeps existing files under `xray/`, and adds missing profiles. It then pulls images and recreates containers. User data in `data/` is not affected.
 
-From a clone, run `git pull` first, then `./install.sh --domain manage.example.com --upgrade`.
+## Change Branches
 
-### Upgrading to profiles (from a single `xray/config.json`)
+To switch branches, use the installer from the target branch and pass `--upgrade --branch`. If the branch changes the app, also pass the matching app image tag. See [Install from a branch](installation.md#install-from-a-branch) for how branch and image tags are selected.
+
+```bash
+BRANCH=my-feature
+IMAGE_TAG=pr-21
+curl -fsSL "https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/$BRANCH/install.sh" \
+  | sudo bash -s -- \
+      --upgrade \
+      --branch "$BRANCH" \
+      --image-tag "$IMAGE_TAG"
+```
+
+To return to `main`, use the `main` installer URL and pass `--upgrade --branch main --image-tag latest`. If you run from another directory, include `--deploy-dir /absolute/path/to/easy-xray`.
+
+## Upgrade a Legacy Single-Config Installation
 
 Installs from before profiles keep the Xray config in `xray/config.json`. After the daily image update they keep working unchanged in **legacy mode**: the Profiles page shows a banner, and switching profiles is disabled.
 
@@ -25,21 +48,11 @@ Run the installer with `--upgrade` (as above) to switch to profiles. It moves `x
 
 ## Pinning a Specific Version
 
-To use a specific release instead of `latest`, edit `deployables/docker-compose.yaml` and change the image tags:
-
-```yaml
-# Before
-image: hamidmayeli/quick-vless:latest
-
-# After
-image: hamidmayeli/quick-vless:1.2.0
-```
-
-Then apply:
+To use a specific release instead of `latest`, rerun the installer with `--image-tag` and `--upgrade`:
 
 ```bash
-cd deployables
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/hamidmayeli/quick-vless/refs/heads/main/install.sh \
+  | sudo bash -s -- --upgrade --image-tag 1.2.0
 ```
 
 Available versions are listed on [Docker Hub](https://hub.docker.com/r/hamidmayeli/quick-vless/tags).
@@ -47,19 +60,18 @@ Available versions are listed on [Docker Hub](https://hub.docker.com/r/hamidmaye
 ## Rolling Back
 
 1. Note the version you were running before the upgrade (check `docker compose ps` or the image digest).
-2. Pin that version in `docker-compose.yaml` as shown above.
-3. Run `docker compose up -d`.
+2. Rerun the installer with `--upgrade --image-tag PREVIOUS_TAG` to pull and apply that image.
 
-If you also restored a data backup (see below), run `docker compose down` first, restore the data, then `docker compose up -d`.
+If you also restored a data backup (see below), run `docker compose down` from `/path/to/easy-xray` before restoring it, then run `docker compose up -d`.
 
 ## Backup
 
 ### User data
 
-All user accounts, admins, the active profile and usage history live in `deployables/data/app/`, a folder on the host mounted into the app container.
+All user accounts, admins, the active profile, and usage history live in `<deploy-dir>/data/app/`, a folder on the host mounted into the app container.
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 
 docker compose stop app      # so the files are consistent
 sudo tar czf ~/easy-xray-data-$(date +%Y%m%d).tar.gz data/app
@@ -73,21 +85,22 @@ Move the archive off the server. `data/xray/` (regenerated by the app) and `data
 `.env` and the profile folders in `xray/` contain your cryptographic keys and the Cloudflare Origin certificate. Back them up separately and store them securely.
 
 ```bash
+cd /path/to/easy-xray
 sudo tar czf ~/easy-xray-config-$(date +%Y%m%d).tar.gz \
-  deployables/.env \
-  deployables/xray
+  .env \
+  xray
 ```
 
 ## Restore from Backup
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 docker compose down
 
 sudo rm -rf data/app
 sudo tar xzf ~/easy-xray-data-YYYYMMDD.tar.gz
-# Only if .env or xray/ were lost (run from the folder that contains deployables/):
-#   cd .. && sudo tar xzf ~/easy-xray-config-YYYYMMDD.tar.gz && cd deployables
+# Only if .env or xray/ were lost:
+sudo tar xzf ~/easy-xray-config-YYYYMMDD.tar.gz
 
 docker compose up -d
 ```
@@ -97,21 +110,21 @@ Replace `YYYYMMDD` with the date of the backup file you want to restore.
 ## Stopping and Starting Services
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 
 docker compose stop          # stop containers, keep them and their volumes
 docker compose start         # start previously stopped containers
 docker compose restart       # restart all containers
-docker compose down          # stop and remove containers (volumes are preserved)
-docker compose down -v       # DESTRUCTIVE: removes containers AND the data volume
+docker compose down          # stop and remove containers
+docker compose down -v       # also remove named volumes, if any
 ```
 
-> `docker compose down -v` permanently deletes all user data, usage history, and admin accounts. There is no recovery without a backup.
+The current Compose file stores persistent data in host bind mounts under the deployment directory. `docker compose down -v` does not delete those files. Do not remove `<deploy-dir>/data/` unless you intend to delete or restore that data.
 
 ## Viewing Logs
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 
 docker compose logs app              # management app logs (last 100 lines)
 docker compose logs xray             # Xray logs
@@ -124,7 +137,7 @@ docker compose logs --tail=200       # last 200 lines from all services
 ## Checking Running Containers
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 docker compose ps
 ```
 
@@ -136,6 +149,6 @@ Usage history CSVs accumulate over time. Each daily file is small (one row per u
 
 ```bash
 # Remove usage history older than 90 days
-cd deployables
+cd /path/to/easy-xray
 sudo find data/app/usage_history -name "*.csv" -mtime +90 -delete
 ```

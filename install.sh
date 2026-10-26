@@ -44,6 +44,7 @@ Run from a branch (pass the same branch to --branch so every file comes from it)
 
 Required:
   --domain DOMAIN           Management UI domain (e.g. manage.example.com)
+                            Required on first install; otherwise loaded from .env
 
 Optional:
   --host HOST               Server IP/domain in REALITY vless:// URLs
@@ -203,17 +204,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ------------------------------------------------------------
-# Validate required args
+# Validate explicit arguments
 # ------------------------------------------------------------
-[[ -n "$PARAM_DOMAIN" ]] || die "--domain is required. Run with --help for usage."
-
-# Validate key pair: if one is given, the other must be too
-if [[ -n "$PARAM_XRAY_PRIVATE_KEY" && -z "$PARAM_XRAY_PUBLIC_KEY" ]]; then
-  die "--xray-private-key requires --xray-public-key to be supplied as well."
-fi
-if [[ -n "$PARAM_XRAY_PUBLIC_KEY" && -z "$PARAM_XRAY_PRIVATE_KEY" ]]; then
-  die "--xray-public-key requires --xray-private-key to be supplied as well."
-fi
 if [[ -n "$PARAM_CF_DOMAIN" && ! "$PARAM_CF_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
   die "--cf-domain must be a hostname such as cdn.example.com."
 fi
@@ -288,6 +280,7 @@ load_env_if_present() {
     grep -E "^${1}=" "$env_file" 2>/dev/null | head -1 | cut -d'=' -f2- || true
   }
 
+  [[ -n "$PARAM_DOMAIN"         ]] || PARAM_DOMAIN="$(_env_val MANAGEMENT_DOMAIN)"
   [[ -z "$PARAM_JWT_SECRET"        ]] && PARAM_JWT_SECRET="$(_env_val JWT_SECRET)"
   [[ -z "$PARAM_XRAY_PRIVATE_KEY"  ]] && PARAM_XRAY_PRIVATE_KEY="$(_env_val XRAY_REALITY_PRIVATE_KEY)"
   [[ -z "$PARAM_XRAY_PUBLIC_KEY"   ]] && PARAM_XRAY_PUBLIC_KEY="$(_env_val XRAY_REALITY_PUBLIC_KEY)"
@@ -315,6 +308,16 @@ if [[ -z "$PARAM_BRANCH" && -n "$SCRIPT_DIR" ]] && command -v git &>/dev/null; t
 fi
 
 load_env_if_present
+
+[[ -n "$PARAM_DOMAIN" ]] || die "--domain is required for a first install; reruns load it from $DEPLOY_DIR/.env."
+
+# Validate the final key pair after persisted values have been loaded.
+if [[ -n "$PARAM_XRAY_PRIVATE_KEY" && -z "$PARAM_XRAY_PUBLIC_KEY" ]]; then
+  die "--xray-private-key requires --xray-public-key, or a persisted public key in .env."
+fi
+if [[ -n "$PARAM_XRAY_PUBLIC_KEY" && -z "$PARAM_XRAY_PRIVATE_KEY" ]]; then
+  die "--xray-public-key requires --xray-private-key, or a persisted private key in .env."
+fi
 
 # The direct TLS profiles use a separate DNS-only SNI so Caddy can continue
 # routing --domain to the management UI.
@@ -851,7 +854,8 @@ cf_profile_dirs() {
   local dir
   for dir in "$DEPLOY_DIR"/xray/*/; do
     dir="${dir%/}"
-    if grep -qF "/etc/xray/profiles/$(basename "$dir")/tls/fullchain.pem" "$dir/config.json" 2>/dev/null; then
+    if [[ "$(basename "$dir")" == vless-cf-* ]] \
+        && grep -qF "/etc/xray/profiles/$(basename "$dir")/tls/fullchain.pem" "$dir/config.json" 2>/dev/null; then
       echo "$dir"
     fi
   done
@@ -946,7 +950,7 @@ step_install_vpn_certificate() {
     return 0
   fi
 
-  local profile cert key webroot
+  local profile cert="" key="" webroot="" existing_problem="" candidate_cert="" candidate_key=""
   for profile in vless-ws-tls vless-xhttp-tls; do
     [[ -f "$DEPLOY_DIR/xray/$profile/config.json" && -f "$DEPLOY_DIR/xray/$profile/client-config.template" ]] \
       || die "Direct TLS profiles are missing. Re-run with --upgrade to download them."
@@ -954,22 +958,38 @@ step_install_vpn_certificate() {
   [[ -f "$DEPLOY_DIR/renew-vpn-certificate.sh" ]] \
     || die "Certificate renewal helper is missing. Re-run with --upgrade to download it."
 
-  webroot="$DEPLOY_DIR/data/acme"
-  mkdir -p "$webroot"
+  # Reuse a valid certificate already installed by an earlier run before invoking Certbot.
+  for profile in vless-ws-tls vless-xhttp-tls; do
+    candidate_cert="$DEPLOY_DIR/xray/$profile/tls/fullchain.pem"
+    candidate_key="$DEPLOY_DIR/xray/$profile/tls/privkey.pem"
+    [[ -f "$candidate_cert" && -f "$candidate_key" ]] || continue
+    if existing_problem="$(certificate_problem "$candidate_cert" "$candidate_key" "$PARAM_VPN_DOMAIN")" \
+        && openssl x509 -in "$candidate_cert" -noout -checkend 0 >/dev/null 2>&1; then
+      cert="$candidate_cert"
+      key="$candidate_key"
+      info "Reusing the installed VPN certificate (expires $(cert_end_date "$cert"))."
+      break
+    fi
+  done
 
-  info "Starting Caddy for the HTTP-01 challenge on $PARAM_VPN_DOMAIN ..."
-  (cd "$DEPLOY_DIR" && docker compose up -d --no-deps caddy) \
-    || die "Could not start Caddy for the certificate challenge."
-  (cd "$DEPLOY_DIR" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile) \
-    || die "Could not reload Caddy with the ACME webroot route. Run install.sh --upgrade and try again."
+  if [[ -z "$cert" ]]; then
+    webroot="$DEPLOY_DIR/data/acme"
+    mkdir -p "$webroot"
 
-  certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
-    --webroot --webroot-path "$webroot" --cert-name "$PARAM_VPN_DOMAIN" \
-    --domains "$PARAM_VPN_DOMAIN" --keep-until-expiring \
-    || die "Certbot could not issue or renew a certificate for $PARAM_VPN_DOMAIN. Verify DNS points directly to this server and port 80 is reachable."
+    info "Starting Caddy for the HTTP-01 challenge on $PARAM_VPN_DOMAIN ..."
+    (cd "$DEPLOY_DIR" && docker compose up -d --no-deps caddy) \
+      || die "Could not start Caddy for the certificate challenge."
+    (cd "$DEPLOY_DIR" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile) \
+      || die "Could not reload Caddy with the ACME webroot route. Run install.sh --upgrade and try again."
 
-  cert="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/fullchain.pem"
-  key="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/privkey.pem"
+    certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
+      --webroot --webroot-path "$webroot" --cert-name "$PARAM_VPN_DOMAIN" \
+      --domains "$PARAM_VPN_DOMAIN" --keep-until-expiring \
+      || die "Certbot could not issue or renew a certificate for $PARAM_VPN_DOMAIN. Verify DNS points directly to this server and port 80 is reachable."
+
+    cert="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/fullchain.pem"
+    key="/etc/letsencrypt/live/$PARAM_VPN_DOMAIN/privkey.pem"
+  fi
   check_certificate "$cert" "$key" "$PARAM_VPN_DOMAIN"
 
   for profile in vless-ws-tls vless-xhttp-tls; do
@@ -1215,6 +1235,7 @@ run_step "install_vpn_prerequisites" step_install_vpn_prerequisites always
 run_step "check_prerequisites"     step_check_prerequisites     always
 run_step "generate_secrets"        step_generate_secrets        always
 run_step "write_env_file"          step_write_env_file          always
+run_step "setup_cron_jobs"         step_setup_cron_jobs         always
 run_step "install_cf_certificate"  step_install_cf_certificate  always
 run_step "write_xray_profiles"     step_write_xray_profiles     always
 run_step "pull_images"             step_pull_images             "$UPGRADE_MODE"
@@ -1225,7 +1246,6 @@ fi
 run_step "install_vpn_certificate" step_install_vpn_certificate always
 run_step "start_services"          step_start_services          "$UPGRADE_MODE"
 run_step "reload_xray"             step_reload_xray             always
-run_step "setup_cron_jobs"         step_setup_cron_jobs         always
 run_step "verify_health"           step_verify_health
 run_step "verify_cloudflare"       step_verify_cloudflare       always
 

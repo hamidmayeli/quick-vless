@@ -56,6 +56,8 @@ cd quick-vless
 
 ## Documentation
 
-- [Hosting guide](docs/hosting.md) — server setup, DNS, firewall, backups
+- [Requirements](docs/requirements.md) — server, network, and DNS prerequisites
+- [Installation](docs/installation.md) — install from main or a branch, resume, and locate deployment files
+- [Hosting and profiles](docs/hosting.md) — accounts, profiles, certificates, and persistent data
 - [Configuration reference](docs/configuration.md) — all environment variables explained
-- [Upgrading and maintenance](docs/upgrading.md) — upgrades, rollbacks, backups, logs
+- [Updating and maintenance](docs/upgrading.md) — image and deployment updates, backups, logs, and recovery

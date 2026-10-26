@@ -1,6 +1,6 @@
 # Configuration Reference
 
-All configuration is supplied through environment variables in `deployables/.env`. The install script generates this file automatically; edit it manually if you need to change values after the initial install.
+All configuration is supplied through environment variables in `<deploy-dir>/.env`. The installer creates this file automatically; edit it manually if you need to change values after installation. For server requirements and install steps, see [Requirements](requirements.md) and [Installation](installation.md).
 
 ## Environment Variables
 
@@ -18,7 +18,7 @@ All configuration is supplied through environment variables in `deployables/.env
 | `XRAY_SNI` | No | `dl.google.com` | The domain that Xray impersonates. Must be a public domain with a valid TLS certificate on port 443. Do not use your own domain here. |
 | `XRAY_FINGERPRINT` | No | `chrome` | TLS client fingerprint to mimic. Options: `chrome`, `firefox`, `safari`, `ios`, `android`, `edge`, `360`, `qq`, `random`, `randomized`. |
 | `XRAY_VPN_DOMAIN` | No | — | DNS-only hostname for direct TLS profiles `vless-ws-tls` and `vless-xhttp-tls`. Must differ from `MANAGEMENT_DOMAIN` and point directly to this server. `install.sh` obtains and renews a Let's Encrypt certificate. |
-| `XRAY_CF_DOMAIN` | No | — | Hostname proxied by Cloudflare for the Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws` (e.g. `cdn.example.com`). Empty keeps them disabled. See [Cloudflare Setup](hosting.md#cloudflare-setup). |
+| `XRAY_CF_DOMAIN` | No | — | Hostname proxied by Cloudflare for the Cloudflare profiles, `vless-cf-xhttp` and `vless-cf-ws` (e.g. `cdn.example.com`). Empty keeps them disabled. See [Cloudflare profiles](hosting.md#cloudflare-profiles). |
 | `XRAY_WS_ID` | No | Auto-generated | WebSocket path shared by `vless-cf-ws` and `vless-ws-tls`, without the leading slash. Random per server. |
 | `XRAY_XHTTP_ID` | No | Auto-generated | XHTTP path shared by `vless-cf-xhttp` and `vless-xhttp-tls`, without the leading slash. Random per server. |
 | `XRAY_VLESS_ENC_PRIVATE_KEY` | No | Auto-generated | VLESS Encryption private key shared by the XHTTP profiles (X25519, the same format as the REALITY keys). Goes into their `config.json` files. Keep it secret. |
@@ -40,7 +40,7 @@ Private key: <base64-private-key>
 Public key:  <base64-public-key>
 ```
 
-Place the private key in `xray/vless-reality/config.json` under `realitySettings.privateKey`, and the public key in `xray/vless-reality/client-config.template` as the `pbk=` value. Also record both in `.env` (`XRAY_REALITY_PRIVATE_KEY`, `XRAY_REALITY_PUBLIC_KEY`).
+Place the private key in `<deploy-dir>/xray/vless-reality/config.json` under `realitySettings.privateKey`, and the public key in `<deploy-dir>/xray/vless-reality/client-config.template` as the `pbk=` value. Also record both in `.env` (`XRAY_REALITY_PRIVATE_KEY`, `XRAY_REALITY_PUBLIC_KEY`).
 
 ### Short ID
 
@@ -48,7 +48,7 @@ Place the private key in `xray/vless-reality/config.json` under `realitySettings
 openssl rand -hex 4
 ```
 
-The short ID must appear in `xray/vless-reality/config.json` under `realitySettings.shortIds` and in the template as the `sid=` value.
+The short ID must appear in `<deploy-dir>/xray/vless-reality/config.json` under `realitySettings.shortIds` and in the template as the `sid=` value.
 
 ### JWT secret
 
@@ -58,10 +58,10 @@ openssl rand -hex 32
 
 ## Applying Configuration Changes
 
-After editing `deployables/.env`:
+After editing `<deploy-dir>/.env`:
 
 ```bash
-cd deployables
+cd /path/to/easy-xray
 docker compose up -d
 ```
 
@@ -87,7 +87,7 @@ Do not use `localhost`, your own domain, or any domain you control.
 
 ## Writing Your Own Profile
 
-A profile is a folder in `deployables/xray/` (on the server: `<deploy-dir>/xray/`) whose name uses lowercase letters, digits, `.`, `_` or `-`. It appears on the **Profiles** page as soon as it contains a `config.json`.
+A profile is a folder in `<deploy-dir>/xray/` whose name uses lowercase letters, digits, `.`, `_` or `-`. It appears on the **Profiles** page as soon as it contains a `config.json`.
 
 ### config.json
 
