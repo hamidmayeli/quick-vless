@@ -7,17 +7,59 @@
 .state { color: #6060a0; }
 .error { color: #ff8080; }
 
-.formCard {
-  padding: 1.5rem;
+.formOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+}
+
+.formDialog {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(90vh, 48rem);
+  overflow-y: auto;
   background: #1a1a2e;
   border: 1px solid #2a2a4a;
-  border-radius: 10px;
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+.formHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.formBody {
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.formTitle { margin: 0; font-size: 1rem; color: #a0a0c0; }
+.formTitle { margin: 0; font-size: 1.15rem; color: #f2f2ff; font-weight: 600; }
+
+.closeForm {
+  padding: 0.2rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #a0a0c0;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.closeForm:hover { color: #fff; background: #2a2a4a; }
 
 .grid {
   display: grid;
@@ -142,12 +184,25 @@
     flex-wrap: wrap;
   }
 
-  .formCard {
-    padding: 1rem;
-  }
-
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .formOverlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .formDialog {
+    max-height: none;
+    margin: auto 0;
+  }
+
+  .formBody {
+    padding: 1rem;
   }
 }
 

@@ -68,10 +68,25 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ variant: NotificationVariant; message: string } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const formOpen = creating || editing !== null
 
   useEffect(() => {
     void settingsApi.get().catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    if (!formOpen) return
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setEditing(null)
+        setCreating(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [formOpen])
 
   function openCreate() {
     setForm(EMPTY_FORM)
@@ -141,38 +156,56 @@ export function UsersPage({ showOwner }: UsersPageProps) {
         <button className={styles.btnPrimary} onClick={openCreate}>+ Add User</button>
       </div>
 
-      {(creating || editing) && (
-        <div className={styles.formCard}>
-          <h3 className={styles.formTitle}>{creating ? 'New User' : `Edit — ${editing!.name}`}</h3>
-          <div className={styles.grid}>
-            <label className={styles.field}>
-              Name
-              <input className={styles.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </label>
-            <label className={styles.field}>
-              Quota
-              <input className={styles.input} type="text" inputMode="text" value={form.quota} placeholder="Unlimited (e.g. 25GB)"
-                onChange={(e) => { setForm({ ...form, quota: e.target.value }); setFormError(null) }} />
-            </label>
-            <label className={styles.field}>
-              Expiry date
-              <input className={styles.input} type="date" value={form.expiry ?? ''}
-                onChange={(e) => setForm({ ...form, expiry: e.target.value || null })} />
-            </label>
-            <label className={styles.checkField}>
-              <input type="checkbox" checked={form.single_connection} onChange={(e) => setForm({ ...form, single_connection: e.target.checked })} />
-              Single connection (kick old on reconnect)
-            </label>
-            <label className={styles.checkField}>
-              <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
-              Enabled
-            </label>
-          </div>
-          {formError && <p className={styles.error}>{formError}</p>}
-          <div className={styles.formActions}>
-            <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-            <button className={styles.btnGhost} onClick={closeForm}>Cancel</button>
-          </div>
+      {formOpen && (
+        <div className={styles.formOverlay} onClick={closeForm} role="presentation">
+          <form
+            className={styles.formDialog}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => { event.preventDefault(); void handleSave() }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-form-title"
+          >
+            <div className={styles.formHeader}>
+              <h3 id="user-form-title" className={styles.formTitle}>
+                {creating ? 'New User' : `Edit — ${editing?.name}`}
+              </h3>
+              <button type="button" className={styles.closeForm} onClick={closeForm} aria-label="Close user form">
+                ×
+              </button>
+            </div>
+            <div className={styles.formBody}>
+              <div className={styles.grid}>
+                <label className={styles.field}>
+                  Name
+                  <input className={styles.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                </label>
+                <label className={styles.field}>
+                  Quota
+                  <input className={styles.input} type="text" inputMode="text" value={form.quota} placeholder="Unlimited (e.g. 25GB)"
+                    onChange={(e) => { setForm({ ...form, quota: e.target.value }); setFormError(null) }} />
+                </label>
+                <label className={styles.field}>
+                  Expiry date
+                  <input className={styles.input} type="date" value={form.expiry ?? ''}
+                    onChange={(e) => setForm({ ...form, expiry: e.target.value || null })} />
+                </label>
+                <label className={styles.checkField}>
+                  <input type="checkbox" checked={form.single_connection} onChange={(e) => setForm({ ...form, single_connection: e.target.checked })} />
+                  Single connection (kick old on reconnect)
+                </label>
+                <label className={styles.checkField}>
+                  <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
+                  Enabled
+                </label>
+              </div>
+              {formError && <p className={styles.error}>{formError}</p>}
+              <div className={styles.formActions}>
+                <button className={styles.btnPrimary} type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                <button className={styles.btnGhost} type="button" onClick={closeForm}>Cancel</button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 
