@@ -136,6 +136,14 @@
   border-bottom: 1px solid #1e1e38;
   color: #c0c0e0;
 }
+.table .groupHeader th {
+  padding: 0.8rem 0.75rem 0.45rem;
+  color: #e8e8f0;
+  border-bottom: 1px solid #2a2a4a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+}
 .table tr:hover td { background: #1a1a2e; }
 .table tr.disabled td { opacity: 0.5; }
 
@@ -229,6 +237,20 @@
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;
+  }
+
+  .table .groupHeader {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin: 1rem 0 0;
+    padding: 0;
+  }
+
+  .table .groupHeader th {
+    display: block;
+    padding: 0.25rem 0;
+    border: 0;
   }
 
   .table td {

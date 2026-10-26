@@ -17,12 +17,13 @@ test.describe('User management', () => {
     }
   })
 
-  test('super admin sees the Owner column', async ({ page, request }) => {
+  test('super admin sees users grouped by admin', async ({ page, request }) => {
     await createUser(request, await apiLogin(request, SUPER_ADMIN), 'OwnedBySuper')
     await loginAndNavigate(page)
 
-    await expect(page.getByRole('columnheader', { name: 'Owner' })).toBeVisible()
-    await expect(page.getByRole('row', { name: /OwnedBySuper/ })).toContainText(SUPER_ADMIN.username)
+    const ownerGroup = page.locator('tbody').filter({ has: page.getByRole('row', { name: SUPER_ADMIN.username }) })
+    await expect(page.getByRole('columnheader', { name: 'Owner' })).toHaveCount(0)
+    await expect(ownerGroup.getByRole('cell', { name: 'OwnedBySuper' })).toBeVisible()
   })
 
   test('users page shows empty state message', async ({ page }) => {
