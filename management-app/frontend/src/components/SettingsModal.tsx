@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TIMEZONE_OPTIONS, useTimeZone, type TimeZoneSetting } from '@/settings/timezone'
+import { getStoredTimeZone, setStoredTimeZone, TIMEZONE_OPTIONS, type TimeZoneSetting } from '@/settings/timezone'
 import { getThemePreference, setThemePreference, type ThemePreference } from '@/settings/theme'
 import { settingsApi } from '@/services/api'
 import styles from './SettingsModal.module.css'
@@ -11,31 +11,42 @@ interface SettingsModalProps {
 
 export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference)
-  const [timeZone, setTimeZone] = useTimeZone()
+  const [timeZone, setTimeZone] = useState<TimeZoneSetting>(getStoredTimeZone)
   const [domainOverride, setDomainOverride] = useState('')
+  const [savedDomainOverride, setSavedDomainOverride] = useState('')
   const [domainLoaded, setDomainLoaded] = useState(false)
-  const [savingDomain, setSavingDomain] = useState(false)
+  const [applyingChanges, setApplyingChanges] = useState(false)
   const [domainError, setDomainError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isSuperAdmin) return
     void settingsApi.get().then((settings) => {
-      setDomainOverride(settings.domain_override ?? '')
+      const savedDomain = settings.domain_override ?? ''
+      setDomainOverride(savedDomain)
+      setSavedDomainOverride(savedDomain)
       setDomainLoaded(true)
     })
       .catch(() => setDomainError('Could not load the domain override setting.'))
   }, [isSuperAdmin])
 
-  async function saveDomain() {
-    setSavingDomain(true)
+  async function applyChanges() {
+    setApplyingChanges(true)
     setDomainError(null)
     try {
-      const settings = await settingsApi.update(domainOverride.trim())
-      setDomainOverride(settings.domain_override ?? '')
+      const normalizedDomain = domainOverride.trim()
+      if (isSuperAdmin && domainLoaded && normalizedDomain !== savedDomainOverride) {
+        const settings = await settingsApi.update(normalizedDomain)
+        const savedDomain = settings.domain_override ?? ''
+        setDomainOverride(savedDomain)
+        setSavedDomainOverride(savedDomain)
+      }
+      setThemePreference(theme)
+      setStoredTimeZone(timeZone)
+      onClose()
     } catch (error) {
       setDomainError(error instanceof Error ? error.message : 'Could not save the domain override.')
     } finally {
-      setSavingDomain(false)
+      setApplyingChanges(false)
     }
   }
 
@@ -76,7 +87,6 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
                 onChange={(event) => {
                   const preference = event.target.value as ThemePreference
                   setTheme(preference)
-                  setThemePreference(preference)
                 }}
               >
                 <option value="system">System</option>
@@ -114,21 +124,23 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
                   autoComplete="url"
                   placeholder="vpn.example.com"
                   value={domainOverride}
-                  disabled={!domainLoaded || savingDomain}
+                  disabled={!domainLoaded || applyingChanges}
                   onChange={(event) => { setDomainOverride(event.target.value); setDomainError(null) }}
                 />
               </label>
               {domainError && <p className={styles.error} role="alert">{domainError}</p>}
-              <button type="button" className={styles.doneBtn} onClick={() => void saveDomain()} disabled={!domainLoaded || savingDomain}>
-                {savingDomain ? 'Saving…' : 'Save domain'}
-              </button>
             </div>
           )}
         </div>
 
         <div className={styles.footer}>
-          <button type="button" className={styles.doneBtn} onClick={onClose}>
-            Done
+          <button
+            type="button"
+            className={styles.doneBtn}
+            onClick={() => void applyChanges()}
+            disabled={applyingChanges || (isSuperAdmin && !domainLoaded)}
+          >
+            {applyingChanges ? 'Applying…' : 'Apply changes'}
           </button>
         </div>
       </div>

@@ -58,6 +58,8 @@ const xrayProfiles = {
   ],
 }
 
+let domainOverride = null
+
 function xrayProfilesState() {
   return {
     ...xrayProfiles,
@@ -75,6 +77,27 @@ function activateXrayProfile(res, name) {
 
 // Note: the mock does not scope users or usage per admin — every admin sees all mock data.
 module.exports = function (req, res, next) {
+  if (req.url === '/v1/settings' && req.method === 'GET') {
+    return res.json({ domain_override: domainOverride })
+  }
+  if (req.url === '/v1/settings' && req.method === 'PUT') {
+    const requestedDomain = String(req.body?.domain_override || '').trim()
+    if (requestedDomain) {
+      let parsed
+      try {
+        parsed = new URL(`https://${requestedDomain}`)
+      } catch {
+        return res.status(400).json({ error: 'Enter a hostname, optionally with a port, without a scheme or path.' })
+      }
+      if (!parsed.hostname || parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username || parsed.password) {
+        return res.status(400).json({ error: 'Enter a hostname, optionally with a port, without a scheme or path.' })
+      }
+      domainOverride = parsed.host
+    } else {
+      domainOverride = null
+    }
+    return res.json({ domain_override: domainOverride })
+  }
   if (req.method === 'GET' && req.url === '/v1/xray/profiles') {
     return res.json(xrayProfilesState())
   }

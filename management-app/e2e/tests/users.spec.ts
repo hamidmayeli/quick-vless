@@ -60,14 +60,30 @@ test.describe('User management', () => {
 
     await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByLabel('Domain override').fill('links.example.com')
-    await page.getByRole('button', { name: 'Save domain' }).click()
-    await expect(page.getByLabel('Domain override')).toHaveValue('links.example.com')
-    await page.getByRole('button', { name: 'Done' }).click()
+    await page.getByRole('button', { name: 'Apply changes' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Copy Config URL' }).click()
 
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(`https://links.example.com/api/v1/config/${user.id}`)
+  })
+
+  test('applies local settings without writing an unchanged domain override', async ({ page }) => {
+    await loginAndNavigate(page)
+    let domainUpdates = 0
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/v1/settings') && request.method() === 'PUT') domainUpdates += 1
+    })
+
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page.getByLabel('Appearance').selectOption('light')
+    await page.getByLabel('Time zone').selectOption('UTC')
+    await page.getByRole('button', { name: 'Apply changes' }).click()
+
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light')
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('usage-timezone'))).toBe('UTC')
+    expect(domainUpdates).toBe(0)
   })
 
   test('copies with the current domain and warns when the domain override cannot load', async ({ page, request, context }) => {
