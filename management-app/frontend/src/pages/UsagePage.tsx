@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useUsers } from '@/hooks/useUsers'
 import { useUsage } from '@/hooks/useUsage'
+import { useAuth } from '@/hooks/useAuth'
 import { UsagePerUserChart } from '@/components/UsagePerUserChart'
 import { UsageShareChart } from '@/components/UsageShareChart'
 import { AggregateUsageChart } from '@/components/AggregateUsageChart'
@@ -21,6 +22,7 @@ const PERIOD_PRESETS: { value: Exclude<PeriodPreset, 'custom'>; label: string; m
 export function UsagePage() {
   const { users, loading: usersLoading } = useUsers()
   const { summaries, loading: usageLoading, error } = useUsage(users)
+  const { isSuperAdmin } = useAuth()
   const [selectedUserIds, setSelectedUserIds] = useState<string[] | null>(null)
   const [grouping, setGrouping] = useState<UsageGrouping>('hourly')
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('24h')
@@ -107,10 +109,12 @@ export function UsagePage() {
           </>
         )}
       </div>
-      <AggregateUsageChart records={chartRecords} grouping={grouping} timeZone={timeZone} onGroupingChange={setGrouping} />
+      <AggregateUsageChart records={chartRecords} users={users} isSuperAdmin={isSuperAdmin} grouping={grouping} timeZone={timeZone} onGroupingChange={setGrouping} />
       <UserUsageChart
         records={chartRecords}
         summaries={summaries}
+        users={users}
+        isSuperAdmin={isSuperAdmin}
         grouping={grouping}
         timeZone={timeZone}
         selectedUserIds={selectedUserIds}

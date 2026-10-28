@@ -1,12 +1,34 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts'
-import type { UsageRecord } from '@/types'
-import { buildUsageData, BYTES_PER_GB, formatBytes, type UsageGrouping } from './usageData'
+import type { UsageRecord, User } from '@/types'
+import { buildUsageData, BYTES_PER_GB, CHART_COLORS, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
 
-interface AggregateUsageChartProps { records: UsageRecord[]; grouping: UsageGrouping; timeZone?: string; onGroupingChange: (grouping: UsageGrouping) => void }
+interface AggregateUsageChartProps { records: UsageRecord[]; users: User[]; isSuperAdmin: boolean; grouping: UsageGrouping; timeZone?: string; onGroupingChange: (grouping: UsageGrouping) => void }
 
-export function AggregateUsageChart({ records, grouping, timeZone, onGroupingChange }: AggregateUsageChartProps) {
+export function AggregateUsageChart({ records, users, isSuperAdmin, grouping, timeZone, onGroupingChange }: AggregateUsageChartProps) {
   const usageData = buildUsageData(records, grouping, timeZone)
+  const ownerByUserId = new Map(users.map((user) => [user.id, user.created_by ?? 'Unknown admin']))
+  const adminSeries = isSuperAdmin
+    ? [...new Set(ownerByUserId.values())].sort((a, b) => a.localeCompare(b)).map((owner) => ({
+        owner,
+        key: `admin:${owner}`,
+      }))
+    : []
+  const adminUsageData = adminSeries.length > 0
+    ? buildUsageData(records.flatMap((record) => {
+        const owner = ownerByUserId.get(record.user_id)
+        return owner ? [{ ...record, user_id: `admin:${owner}` }] : []
+      }), grouping, timeZone)
+    : []
+  const adminUsageByTimestamp = new Map(adminUsageData.map((point) => [String(point.timestamp), point]))
+  const chartData = usageData.map((point) => {
+    const adminPoint = adminUsageByTimestamp.get(String(point.timestamp))
+    return {
+      ...point,
+      ...Object.fromEntries(adminSeries.map(({ key }) => [key, Number(adminPoint?.[key] ?? 0)])),
+    }
+  })
+
   return (
   <section className={styles.chartWrap}>
     <h3 className={styles.chartTitle}>All users usage {(records.reduce((acc, rec) => acc + rec.total, 0) / BYTES_PER_GB).toFixed(2)} GB</h3>
@@ -26,14 +48,29 @@ export function AggregateUsageChart({ records, grouping, timeZone, onGroupingCha
     </div>
     {usageData.length === 0 ? <p className={styles.empty}>No usage data available</p> :
     <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={usageData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+      <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
         <XAxis dataKey="label" tick={{ fill: '#8080a0', fontSize: 11 }} />
         <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
         <Tooltip
           contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
-          formatter={(value) => [formatBytes(Number(value)), 'Used']} />
+          formatter={(value, name) => [
+            formatBytes(Number(value)),
+            adminSeries.find((series) => series.key === name)?.owner ?? 'All users',
+          ]} />
         <Line type="monotone" dataKey="all" name="All users" stroke="#7c7cff" strokeWidth={2} dot={false} />
+        {adminSeries.map(({ key }, index) => (
+          <Line
+            key={key}
+            type="monotone"
+            dataKey={key}
+            name={key}
+            stroke={CHART_COLORS[index % CHART_COLORS.length]}
+            strokeWidth={2}
+            strokeDasharray="6 3"
+            dot={false}
+          />
+        ))}
         <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
       </LineChart>
     </ResponsiveContainer>}
