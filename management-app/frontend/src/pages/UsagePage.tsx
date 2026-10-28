@@ -113,8 +113,6 @@ export function UsagePage() {
       <UserUsageChart
         records={chartRecords}
         summaries={summaries}
-        users={users}
-        isSuperAdmin={isSuperAdmin}
         grouping={grouping}
         timeZone={timeZone}
         selectedUserIds={selectedUserIds}
