@@ -14,8 +14,8 @@ export function App() {
 
   return (
     <>
-      <PwaUpdatePrompt />
       <BrowserRouter>
+        <PwaUpdatePrompt />
         <Routes>
         <Route
           path="/login"

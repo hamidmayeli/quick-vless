@@ -1,6 +1,7 @@
 import { registerSW } from 'virtual:pwa-register'
 
 let updateAvailable = false
+let serviceWorkerRegistration: ServiceWorkerRegistration | null = null
 const listeners = new Set<() => void>()
 
 function publishUpdateAvailable() {
@@ -20,7 +21,14 @@ export function hasPwaUpdate() {
 const updateServiceWorker = registerSW({
   immediate: true,
   onNeedRefresh: publishUpdateAvailable,
+  onRegisteredSW: (_serviceWorkerUrl, registration) => {
+    serviceWorkerRegistration = registration ?? null
+  },
 })
+
+export function checkForPwaUpdate() {
+  void serviceWorkerRegistration?.update().catch(() => undefined)
+}
 
 export function applyPwaUpdate() {
   return updateServiceWorker(true)
