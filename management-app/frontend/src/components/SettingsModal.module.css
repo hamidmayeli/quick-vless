@@ -11,8 +11,8 @@
 }
 
 .dialog {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   max-width: 460px;
   width: 100%;
@@ -39,20 +39,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.1rem 1.25rem;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid var(--border);
 }
 
 .title {
   margin: 0;
   font-size: 1.15rem;
-  color: #f2f2ff;
+  color: var(--text-strong);
   font-weight: 600;
 }
 
 .closeBtn {
   background: transparent;
   border: none;
-  color: #a0a0c0;
+  color: var(--text-muted);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
@@ -62,8 +62,8 @@
 }
 
 .closeBtn:hover {
-  color: #ffffff;
-  background: #2a2a4a;
+  color: var(--text-strong);
+  background: var(--surface-raised);
 }
 
 .body {
@@ -86,13 +86,13 @@
 }
 
 .fieldLabel {
-  color: #e8e8f0;
+  color: var(--text);
   font-size: 0.92rem;
   font-weight: 500;
 }
 
 .fieldDescription {
-  color: #8a8aa8;
+  color: var(--text-subtle);
   font-size: 0.82rem;
   margin-bottom: 0.25rem;
 }
@@ -100,10 +100,10 @@
 .select {
   width: 100%;
   padding: 0.55rem 0.75rem;
-  border: 1px solid #4a4a6a;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #0f0f23;
-  color: #e8e8f0;
+  background: var(--app-bg);
+  color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   outline: none;
@@ -114,22 +114,22 @@
 .input {
   width: 100%;
   padding: 0.55rem 0.75rem;
-  border: 1px solid #4a4a6a;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #0f0f23;
-  color: #e8e8f0;
+  background: var(--app-bg);
+  color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   outline: none;
 }
 
 .input:focus {
-  border-color: #7c7cff;
+  border-color: var(--accent);
 }
 
 .error {
   margin: 0;
-  color: #ff8a8a;
+  color: var(--danger);
   font-size: 0.85rem;
 }
 
@@ -139,23 +139,23 @@
 }
 
 .select:focus {
-  border-color: #7c7cff;
+  border-color: var(--accent);
 }
 
 .footer {
   display: flex;
   justify-content: flex-end;
   padding: 0.9rem 1.25rem;
-  border-top: 1px solid #2a2a4a;
-  background: #151528;
+  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
 }
 
 .doneBtn {
   padding: 0.45rem 1.1rem;
-  background: #7c7cff;
+  background: var(--accent);
   border: none;
   border-radius: 6px;
-  color: #ffffff;
+  color: var(--accent-contrast);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;

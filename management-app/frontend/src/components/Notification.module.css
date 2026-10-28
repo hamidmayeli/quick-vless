@@ -11,8 +11,8 @@
   padding: 0.9rem 1rem;
   border: 1px solid;
   border-radius: 6px;
-  background: #181823;
-  color: #f2f2f6;
+  background: var(--surface);
+  color: var(--text-strong);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   animation: enter 160ms ease-out;
 }
@@ -24,7 +24,7 @@
 
 .content { min-width: 0; flex: 1; }
 .title { display: block; margin-bottom: 0.2rem; font-size: 0.9rem; }
-.message { margin: 0; color: #d6d6df; font-size: 0.875rem; line-height: 1.45; overflow-wrap: anywhere; }
+.message { margin: 0; color: var(--text-soft); font-size: 0.875rem; line-height: 1.45; overflow-wrap: anywhere; }
 
 .action {
   margin-top: 0.65rem;
@@ -32,7 +32,7 @@
   border: 1px solid currentColor;
   border-radius: 4px;
   background: transparent;
-  color: #e8e8f0;
+  color: var(--text);
   font: inherit;
   font-size: 0.8rem;
   font-weight: 600;
@@ -47,14 +47,14 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #b8b8c4;
+  color: var(--text-muted);
   font: inherit;
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
 }
 
-.dismiss:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.dismiss:hover { color: var(--text-strong); background: var(--surface-raised); }
 
 @keyframes enter {
   from { opacity: 0; transform: translateY(-0.35rem); }

@@ -16,13 +16,13 @@ export function UsagePerUserChart({ summaries, records }: { summaries: UserUsage
     <h3 className={styles.chartTitle}>Data used per user (GB)</h3>
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
-        <XAxis dataKey="name" tick={{ fill: '#8080a0', fontSize: 12 }} />
-        <YAxis unit=" GB" tick={{ fill: '#8080a0', fontSize: 12 }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="name" tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} />
+        <YAxis unit=" GB" tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} />
         <Tooltip
-          contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+          contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
           labelStyle={{ display: 'none' }}
-          itemStyle={{ color: '#e8e8f0' }}
+          itemStyle={{ color: 'var(--text)' }}
           formatter={(value, _, item) => [`${item.payload.name}: ${Number(value ?? 0).toFixed(2)} GB`]}
           />
         <Bar
@@ -30,7 +30,7 @@ export function UsagePerUserChart({ summaries, records }: { summaries: UserUsage
           radius={[4, 4, 0, 0]}
           shape={(props) => {
             // props.payload contains your original data entry (including your `pct` value)
-            const fill = props.payload.pct != null && props.payload.pct >= 90 ? '#ff6b6b' : '#7c7cff';
+            const fill = props.payload.pct != null && props.payload.pct >= 90 ? 'var(--danger)' : 'var(--accent)';
             
             // Return Recharts' standard Rectangle, but with our conditionally overridden fill
             return <Rectangle {...props} fill={fill} />;

@@ -2,10 +2,10 @@
 
 .header { display: flex; align-items: center; justify-content: space-between; }
 
-.title { margin: 0; font-size: 1.4rem; color: #e8e8f0; }
+.title { margin: 0; font-size: 1.4rem; color: var(--text); }
 
-.state { color: #6060a0; }
-.error { color: #ff8080; }
+.state { color: var(--text-faint); }
+.error { color: var(--danger); }
 
 .formOverlay {
   position: fixed;
@@ -24,8 +24,8 @@
   max-width: 560px;
   max-height: min(90vh, 48rem);
   overflow-y: auto;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
   display: flex;
@@ -37,7 +37,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.1rem 1.25rem;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid var(--border);
 }
 
 .formBody {
@@ -47,19 +47,19 @@
   gap: 1rem;
 }
 
-.formTitle { margin: 0; font-size: 1.15rem; color: #f2f2ff; font-weight: 600; }
+.formTitle { margin: 0; font-size: 1.15rem; color: var(--text-strong); font-weight: 600; }
 
 .closeForm {
   padding: 0.2rem 0.4rem;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #a0a0c0;
+  color: var(--text-muted);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
 }
-.closeForm:hover { color: #fff; background: #2a2a4a; }
+.closeForm:hover { color: var(--accent-contrast); background: var(--surface-raised); }
 
 .grid {
   display: grid;
@@ -72,7 +72,7 @@
   flex-direction: column;
   gap: 0.3rem;
   font-size: 0.82rem;
-  color: #8080a0;
+  color: var(--text-subtle);
 }
 
 .checkField {
@@ -80,30 +80,30 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: #a0a0c0;
+  color: var(--text-muted);
   align-self: end;
   padding-bottom: 0.4rem;
 }
 
 .input {
   padding: 0.45rem 0.65rem;
-  background: #0f0f23;
-  border: 1px solid #2a2a4a;
+  background: var(--app-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #e8e8f0;
+  color: var(--text);
   font-size: 0.9rem;
   outline: none;
 }
-.input:focus { border-color: #7c7cff; }
+.input:focus { border-color: var(--accent); }
 
 .formActions { display: flex; gap: 0.75rem; }
 
 .btnPrimary {
   padding: 0.5rem 1.1rem;
-  background: #7c7cff;
+  background: var(--accent);
   border: none;
   border-radius: 7px;
-  color: #fff;
+  color: var(--accent-contrast);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
@@ -115,49 +115,49 @@
 .btnGhost {
   padding: 0.5rem 1.1rem;
   background: transparent;
-  border: 1px solid #3a3a5a;
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #a0a0c0;
+  color: var(--text-muted);
   font-size: 0.875rem;
   cursor: pointer;
 }
-.btnGhost:hover { border-color: #7c7cff; color: #7c7cff; }
+.btnGhost:hover { border-color: var(--accent); color: var(--accent); }
 
 .table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
 .table th {
   text-align: left;
   padding: 0.6rem 0.75rem;
-  color: #6060a0;
-  border-bottom: 1px solid #2a2a4a;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
   font-weight: 500;
 }
 .table td {
   padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid #1e1e38;
-  color: #c0c0e0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-soft);
 }
 .table .groupHeader th {
   padding: 0.8rem 0.75rem 0.45rem;
-  color: #e8e8f0;
-  border-bottom: 1px solid #2a2a4a;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
   font-weight: 600;
   text-align: left;
 }
-.table tr:hover td { background: #1a1a2e; }
+.table tr:hover td { background: var(--surface-alt); }
 .table tr.disabled td { opacity: 0.5; }
 
 .badgeOn {
   padding: 0.2rem 0.55rem;
-  background: #00ff8822;
-  color: #00ff88;
+  background: var(--success-surface);
+  color: var(--success);
   border-radius: 20px;
   font-size: 0.78rem;
 }
 .badgeOff {
   padding: 0.2rem 0.55rem;
-  background: #ff444422;
-  color: #ff8888;
+  background: var(--danger-surface);
+  color: var(--danger);
   border-radius: 20px;
   font-size: 0.78rem;
 }
@@ -167,14 +167,14 @@
 .btnSmall {
   padding: 0.25rem 0.6rem;
   border-radius: 5px;
-  border: 1px solid #3a3a5a;
+  border: 1px solid var(--border-strong);
   background: transparent;
-  color: #a0a0c0;
+  color: var(--text-muted);
   font-size: 0.78rem;
   cursor: pointer;
 }
-.btnSmall:hover { border-color: #7c7cff; color: #7c7cff; }
-.btnSmall.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+.btnSmall:hover { border-color: var(--accent); color: var(--accent); }
+.btnSmall.danger:hover { border-color: var(--danger); color: var(--danger); }
 
 .tableWrap {
   overflow-x: auto;
@@ -232,8 +232,8 @@
   }
 
   .table tr {
-    background: #1a1a2e;
-    border: 1px solid #2a2a4a;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;
@@ -254,12 +254,12 @@
   }
 
   .table td {
-    border-bottom: 1px solid #1e1e38;
+    border-bottom: 1px solid var(--border-subtle);
     padding: 0.4rem 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #c0c0e0;
+    color: var(--text-soft);
   }
 
   .table td:last-child {
@@ -270,7 +270,7 @@
   .table td::before {
     content: attr(data-label);
     font-size: 0.75rem;
-    color: #6060a0;
+    color: var(--text-faint);
     font-weight: 500;
     width: 90px;
     flex-shrink: 0;

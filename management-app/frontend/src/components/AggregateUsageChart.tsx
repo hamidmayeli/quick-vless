@@ -49,16 +49,16 @@ export function AggregateUsageChart({ records, users, isSuperAdmin, grouping, ti
     {usageData.length === 0 ? <p className={styles.empty}>No usage data available</p> :
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
-        <XAxis dataKey="label" tick={{ fill: '#8080a0', fontSize: 11 }} />
-        <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="label" tick={{ fill: 'var(--text-subtle)', fontSize: 11 }} />
+        <YAxis tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
         <Tooltip
-          contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+          contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
           formatter={(value, name) => [
             formatBytes(Number(value)),
             adminSeries.find((series) => series.key === name)?.owner ?? 'All users',
           ]} />
-        <Line type="monotone" dataKey="all" name="All users" stroke="#7c7cff" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="all" name="All users" stroke="var(--accent)" strokeWidth={2} dot={false} />
         {adminSeries.map(({ key }, index) => (
           <Line
             key={key}
@@ -71,7 +71,7 @@ export function AggregateUsageChart({ records, users, isSuperAdmin, grouping, ti
             dot={false}
           />
         ))}
-        <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
+        <Brush dataKey="label" height={24} stroke="var(--accent)" travellerWidth={10} />
       </LineChart>
     </ResponsiveContainer>}
   </section>

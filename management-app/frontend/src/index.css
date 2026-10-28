@@ -8,16 +8,92 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  --app-bg: #0f0f23;
+  --surface: #1a1a2e;
+  --surface-alt: #131326;
+  --surface-raised: #252545;
+  --border: #2a2a4a;
+  --border-subtle: #1e1e38;
+  --border-strong: #3a3a5a;
+  --text: #e8e8f0;
+  --text-strong: #f2f2ff;
+  --text-soft: #c0c0e0;
+  --text-muted: #a0a0c0;
+  --text-subtle: #8080a0;
+  --text-faint: #6060a0;
+  --accent: #7c7cff;
+  --accent-surface: #7c7cff22;
+  --accent-contrast: #ffffff;
+  --success: #00ff88;
+  --success-surface: #00ff8814;
+  --warning: #ffc46b;
+  --warning-surface: #ffb34722;
+  --danger: #ff8080;
+  --danger-surface: #ff4a4a22;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --app-bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-alt: #edf1f6;
+  --surface-raised: #e4e9f1;
+  --border: #d4dbe5;
+  --border-subtle: #e1e6ed;
+  --border-strong: #b7c1cf;
+  --text: #263243;
+  --text-strong: #17212f;
+  --text-soft: #3b4859;
+  --text-muted: #526174;
+  --text-subtle: #64748b;
+  --text-faint: #64748b;
+  --accent: #5146b8;
+  --accent-surface: #5146b81a;
+  --accent-contrast: #ffffff;
+  --success: #137547;
+  --success-surface: #15965318;
+  --warning: #8a5700;
+  --warning-surface: #e9a32322;
+  --danger: #b42318;
+  --danger-surface: #d92d2018;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --app-bg: #f4f6fa;
+    --surface: #ffffff;
+    --surface-alt: #edf1f6;
+    --surface-raised: #e4e9f1;
+    --border: #d4dbe5;
+    --border-subtle: #e1e6ed;
+    --border-strong: #b7c1cf;
+    --text: #263243;
+    --text-strong: #17212f;
+    --text-soft: #3b4859;
+    --text-muted: #526174;
+    --text-subtle: #64748b;
+    --text-faint: #64748b;
+    --accent: #5146b8;
+    --accent-surface: #5146b81a;
+    --accent-contrast: #ffffff;
+    --success: #137547;
+    --success-surface: #15965318;
+    --warning: #8a5700;
+    --warning-surface: #e9a32322;
+    --danger: #b42318;
+    --danger-surface: #d92d2018;
+  }
 }
 
 body {
   margin: 0;
-  background: #0f0f23;
-  color: #e8e8f0;
+  background: var(--app-bg);
+  color: var(--text);
 }
 
 a {
-  color: #7c7cff;
+  color: var(--accent);
   text-decoration: none;
 }
 

@@ -1,9 +1,9 @@
 .page { display: flex; flex-direction: column; gap: 1.75rem; }
 
-.title { margin: 0; font-size: 1.4rem; color: #e8e8f0; }
+.title { margin: 0; font-size: 1.4rem; color: var(--text); }
 
-.state { color: #6060a0; }
-.error { color: #ff8080; }
+.state { color: var(--text-faint); }
+.error { color: var(--danger); }
 
 .cards {
   display: grid;
@@ -16,8 +16,8 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.65rem 0.75rem;
-  background: #131326;
-  border: 1px solid #28284c;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
   border-radius: 8px;
   min-width: 0;
 }
@@ -39,7 +39,7 @@
 .userName {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #e8e8f0;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -48,7 +48,7 @@
 .usedLabel {
   font-size: 1.05rem;
   font-weight: 700;
-  color: #7c7cff;
+  color: var(--accent);
   line-height: 1.2;
 }
 
@@ -59,11 +59,11 @@
   margin-top: auto;
 }
 
-.quota { font-size: 0.72rem; color: #8080a0; }
+.quota { font-size: 0.72rem; color: var(--text-subtle); }
 
 .progressTrack {
   height: 4px;
-  background: #252545;
+  background: var(--surface-raised);
   border-radius: 2px;
   overflow: hidden;
   margin-top: 0.1rem;
@@ -94,13 +94,13 @@
 }
 
 .chartWrap {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1.25rem;
 }
 
-.chartTitle { margin: 0 0 1rem; font-size: 0.9rem; color: #8080a0; font-weight: 500; }
+.chartTitle { margin: 0 0 1rem; font-size: 0.9rem; color: var(--text-subtle); font-weight: 500; }
 
 .userFilters {
   display: flex;
@@ -113,13 +113,13 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: #a8a8c0;
+  color: var(--text-muted);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .filterOption input {
-  accent-color: #7c7cff;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -129,13 +129,13 @@
   flex-wrap: wrap;
   gap: 0.65rem 1rem;
   padding: 0.8rem 1rem;
-  background: #131326;
-  border: 1px solid #28284c;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
 .periodLabel {
-  color: #e8e8f0;
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 600;
   margin-right: 0.25rem;
@@ -148,33 +148,33 @@
 }
 
 .periodButton {
-  color: #a8a8c0;
-  background: #1a1a2e;
-  border: 1px solid #3a3a5a;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 0.3rem 0.65rem;
   cursor: pointer;
 }
 
 .periodButtonActive {
-  color: #fff;
-  background: #4d4d9c;
-  border-color: #7c7cff;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .periodFilter input[type='datetime-local'] {
-  color: #e8e8f0;
-  background: #1a1a2e;
-  border: 1px solid #3a3a5a;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 0.3rem 0.45rem;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .clearPeriod {
-  color: #a8a8c0;
+  color: var(--text-muted);
   background: transparent;
-  border: 1px solid #3a3a5a;
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 0.3rem 0.65rem;
   cursor: pointer;
@@ -186,7 +186,7 @@
   gap: 1.25rem;
 }
 
-.empty { margin: 0; color: #6060a0; font-size: 0.9rem; }
+.empty { margin: 0; color: var(--text-faint); font-size: 0.9rem; }
 
 @media (max-width: 768px) {
   .shareLayout {

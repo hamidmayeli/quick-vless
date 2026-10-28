@@ -21,7 +21,7 @@ export function UsageSummaryCards({ summaries }: { summaries: UserUsageSummary[]
                   <div className={styles.progressTrack}>
                     <div
                       className={styles.progressBar}
-                      style={{ width: `${pct}%`, background: pct! >= 90 ? '#ff6b6b' : '#7c7cff' }}
+                      style={{ width: `${pct}%`, background: pct! >= 90 ? 'var(--danger)' : 'var(--accent)' }}
                     />
                   </div>
                   <span className={styles.quota}>{pct}% of {summary.quotaGb} GB</span>

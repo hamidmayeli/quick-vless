@@ -1,7 +1,7 @@
 .intro {
   margin: 0;
   font-size: 0.85rem;
-  color: #8080a0;
+  color: var(--text-subtle);
   max-width: 720px;
 }
 
@@ -14,16 +14,16 @@
 
 .bannerError {
   composes: banner;
-  background: #ff4a4a22;
-  border: 1px solid #ff4a4a44;
-  color: #ff8080;
+  background: var(--danger-surface);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--danger);
 }
 
 .bannerWarning {
   composes: banner;
-  background: #ffb34722;
-  border: 1px solid #ffb34744;
-  color: #ffc46b;
+  background: var(--warning-surface);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  color: var(--warning);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -32,9 +32,9 @@
 
 .bannerSuccess {
   composes: banner;
-  background: #00ff8814;
-  border: 1px solid #00ff8833;
-  color: #7fe8b0;
+  background: var(--success-surface);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--success);
 }
 
 .list {
@@ -48,14 +48,14 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 1.1rem 1.25rem;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
 .cardActive {
   composes: card;
-  border-color: #7c7cff;
+  border-color: var(--accent);
 }
 
 .cardHeader {
@@ -68,7 +68,7 @@
 .name {
   margin: 0;
   font-size: 1rem;
-  color: #e8e8f0;
+  color: var(--text);
   margin-right: auto;
   word-break: break-all;
 }
@@ -80,8 +80,8 @@
   font-size: 0.82rem;
 }
 
-.inbounds { color: #a0a0c0; }
-.errors { color: #ff8080; }
+.inbounds { color: var(--text-muted); }
+.errors { color: var(--danger); }
 
 .actions {
   display: flex;
@@ -91,8 +91,8 @@
 
 .badgeWarn {
   padding: 0.2rem 0.55rem;
-  background: #ff444422;
-  color: #ff8888;
+  background: var(--danger-surface);
+  color: var(--danger);
   border-radius: 20px;
   font-size: 0.78rem;
 }

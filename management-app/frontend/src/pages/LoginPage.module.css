@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: #0f0f23;
+  background: var(--app-bg);
 }
 
 .card {
@@ -13,8 +13,8 @@
   width: 100%;
   max-width: 380px;
   padding: 2.5rem;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
@@ -22,30 +22,30 @@
   margin: 0;
   font-size: 1.6rem;
   font-weight: 700;
-  color: #7c7cff;
+  color: var(--accent);
   text-align: center;
 }
 
 .subtitle {
   margin: -0.25rem 0 0.5rem;
   font-size: 0.85rem;
-  color: #6060a0;
+  color: var(--text-faint);
   text-align: center;
 }
 
 .hint {
   margin: -0.75rem 0 0.25rem;
   font-size: 0.78rem;
-  color: #6060a0;
+  color: var(--text-faint);
   text-align: center;
 }
 
 .error {
   padding: 0.6rem 0.8rem;
-  background: #ff4a4a22;
-  border: 1px solid #ff4a4a44;
+  background: var(--danger-surface);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
   border-radius: 6px;
-  color: #ff8080;
+  color: var(--danger);
   font-size: 0.85rem;
   margin: 0;
 }
@@ -55,29 +55,29 @@
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #a0a0c0;
+  color: var(--text-muted);
 }
 
 .input {
   padding: 0.55rem 0.75rem;
-  background: #0f0f23;
-  border: 1px solid #2a2a4a;
+  background: var(--app-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #e8e8f0;
+  color: var(--text);
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.15s;
 }
 
-.input:focus { border-color: #7c7cff; }
+.input:focus { border-color: var(--accent); }
 
 .submit {
   margin-top: 0.5rem;
   padding: 0.65rem;
-  background: #7c7cff;
+  background: var(--accent);
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: var(--accent-contrast);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;

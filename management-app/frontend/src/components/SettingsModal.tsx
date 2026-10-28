@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TIMEZONE_OPTIONS, useTimeZone, type TimeZoneSetting } from '@/settings/timezone'
+import { getThemePreference, setThemePreference, type ThemePreference } from '@/settings/theme'
 import { settingsApi } from '@/services/api'
 import styles from './SettingsModal.module.css'
 
@@ -9,6 +10,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference)
   const [timeZone, setTimeZone] = useTimeZone()
   const [domainOverride, setDomainOverride] = useState('')
   const [domainLoaded, setDomainLoaded] = useState(false)
@@ -64,6 +66,25 @@ export function SettingsModal({ isSuperAdmin, onClose }: SettingsModalProps) {
         </div>
 
         <div className={styles.body}>
+          <div className={styles.section}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Appearance</span>
+              <span className={styles.fieldDescription}>Choose a theme or follow your device setting.</span>
+              <select
+                className={styles.select}
+                value={theme}
+                onChange={(event) => {
+                  const preference = event.target.value as ThemePreference
+                  setTheme(preference)
+                  setThemePreference(preference)
+                }}
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+          </div>
           <div className={styles.section}>
             <label className={styles.field}>
               <span className={styles.fieldLabel}>Time zone</span>

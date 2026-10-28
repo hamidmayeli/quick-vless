@@ -46,11 +46,11 @@ export function UserUsageChart({ records, summaries, grouping, timeZone, selecte
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={usageData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
-            <XAxis dataKey="label" tick={{ fill: '#8080a0', fontSize: 11 }} interval={3} />
-            <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="label" tick={{ fill: 'var(--text-subtle)', fontSize: 11 }} interval={3} />
+            <YAxis tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
             <Tooltip
-              contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+              contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
               formatter={(value, name) => [
                 formatBytes(Number(value)),
                 summaries.find((summary) => summary.userId === name)?.name ?? name,
@@ -70,7 +70,7 @@ export function UserUsageChart({ records, summaries, grouping, timeZone, selecte
                   dot={false}
                 />
               ))}
-            <Brush dataKey="label" height={24} stroke="#7c7cff" travellerWidth={10} />
+            <Brush dataKey="label" height={24} stroke="var(--accent)" travellerWidth={10} />
           </LineChart>
         </ResponsiveContainer>
       )}

@@ -12,11 +12,11 @@ export function WeeklyComparisonChart({ records, anchor, timeZone }: { records: 
       {weeklyData.length === 0 ? <p className={styles.empty}>No usage data available</p> :
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={weeklyData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
-          <XAxis dataKey="label" tick={{ fill: '#8080a0', fontSize: 12 }} />
-          <YAxis tick={{ fill: '#8080a0', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="label" tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} />
+          <YAxis tick={{ fill: 'var(--text-subtle)', fontSize: 12 }} tickFormatter={formatBytes} width={64} />
           <Tooltip
-            contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
             formatter={(value, name) => [formatBytes(Number(value)), name]} />
           <Legend />
           {['Current week', 'Last week', '2 weeks ago', '3 weeks ago'].map((name, index) =>

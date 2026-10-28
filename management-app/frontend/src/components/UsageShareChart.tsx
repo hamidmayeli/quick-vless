@@ -33,7 +33,7 @@ export function UsageShareChart({ summaries }: { summaries: UserUsageSummary[] }
                   paddingAngle={3}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#1a1a2e', border: '1px solid #2a2a4a', borderRadius: 8 }}
+                  contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                   formatter={(value, name) => [
                     `${Number(value).toFixed(2)} GB`,
                     summaries.find((summary) => summary.userId === name)?.name ?? name,

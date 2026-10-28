@@ -1,13 +1,13 @@
 .hint {
   margin: 0;
   font-size: 0.82rem;
-  color: #8080a0;
+  color: var(--text-subtle);
 }
 
 .badgePending {
   padding: 0.2rem 0.55rem;
-  background: #ffb34722;
-  color: #ffc46b;
+  background: var(--warning-surface);
+  color: var(--warning);
   border-radius: 20px;
   font-size: 0.78rem;
 }
