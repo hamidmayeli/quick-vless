@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush, Legend } from 'recharts'
 import type { UsageRecord, User } from '@/types'
 import { buildUsageData, BYTES_PER_GB, CHART_COLORS, formatBytes, type UsageGrouping } from './usageData'
 import styles from '../pages/UsagePage.module.css'
@@ -56,15 +56,16 @@ export function AggregateUsageChart({ records, users, isSuperAdmin, grouping, ti
           contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
           formatter={(value, name) => [
             formatBytes(Number(value)),
-            adminSeries.find((series) => series.key === name)?.owner ?? 'All users',
+            adminSeries.find((series) => series.owner === name)?.owner ?? 'All users',
           ]} />
+        <Legend />
         <Line type="monotone" dataKey="all" name="All users" stroke="var(--accent)" strokeWidth={2} dot={false} />
-        {adminSeries.map(({ key }, index) => (
+        {adminSeries.map(({ key, owner }, index) => (
           <Line
             key={key}
             type="monotone"
             dataKey={key}
-            name={key}
+            name={owner}
             stroke={CHART_COLORS[index % CHART_COLORS.length]}
             strokeWidth={2}
             strokeDasharray="6 3"
