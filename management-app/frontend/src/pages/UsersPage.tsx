@@ -71,7 +71,7 @@ export function UsersPage({ showOwner }: UsersPageProps) {
   const formOpen = creating || editing !== null
   const userGroups: { owner: string | null; users: User[] }[] = showOwner
     ? [...users.reduce((groups, user) => {
-        const owner = user.created_by ?? 'Unknown admin'
+        const owner = user.created_by?.toUpperCase() ?? 'Unknown admin'
         const group = groups.get(owner) ?? []
         group.push(user)
         groups.set(owner, group)
