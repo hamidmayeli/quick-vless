@@ -1,5 +1,5 @@
 # ── Stage 1: Backend — build natively, then publish for the target platform ───
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:11.0 AS backend-build
 ARG TARGETARCH
 WORKDIR /src
 
@@ -29,7 +29,7 @@ RUN pnpm build
 FROM teddysun/xray AS xray-src
 
 # ── Stage 4: Runtime ──────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=backend-build /publish       ./
 COPY --from=frontend-build /app/dist     ./wwwroot
