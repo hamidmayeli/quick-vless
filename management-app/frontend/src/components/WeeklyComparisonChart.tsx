@@ -5,6 +5,9 @@ import styles from '../pages/UsagePage.module.css'
 
 export function WeeklyComparisonChart({ records, anchor, timeZone }: { records: UsageRecord[]; anchor: number; timeZone?: string }) {
   const weeklyData = anchor ? buildWeeklyData(records, anchor, timeZone) : []
+  const weekKeys = weeklyData.length > 0
+    ? Object.keys(weeklyData[0]).filter((key) => key.startsWith('week'))
+    : []
   return (
     <div className={styles.chartWrap}>
       <h3 className={styles.chartTitle}>Weekly comparison</h3>
@@ -19,8 +22,10 @@ export function WeeklyComparisonChart({ records, anchor, timeZone }: { records: 
             contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
             formatter={(value, name) => [formatBytes(Number(value)), name]} />
           <Legend />
-          {['Current week', 'Last week', '2 weeks ago', '3 weeks ago'].map((name, index) =>
-            <Bar key={name} dataKey={`week${index}`} name={name} fill={CHART_COLORS[index]} radius={[3, 3, 0, 0]} />)}
+          {weekKeys.map((key, index) => {
+            const name = index === 0 ? 'Current week' : index === 1 ? 'Last week' : `${index} weeks ago`
+            return <Bar key={key} dataKey={key} name={name} fill={CHART_COLORS[index]} radius={[3, 3, 0, 0]} />
+          })}
         </BarChart>
       </ResponsiveContainer>}
     </div>

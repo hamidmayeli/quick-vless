@@ -88,6 +88,7 @@ export function buildUsageData(records: UsageRecord[], grouping: UsageGrouping, 
 
 export function buildWeeklyData(records: UsageRecord[], anchor: number, timeZone?: string) {
   if (!anchor || records.length === 0) return []
+  const rangeStart = anchor - 30 * 86_400_000
 
   const dayFmt = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -99,9 +100,12 @@ export function buildWeeklyData(records: UsageRecord[], anchor: number, timeZone
 
   const dayTotals = new Map<string, number>()
   for (const record of records) {
+    const timestamp = Date.parse(record.date)
+    if (timestamp < rangeStart || timestamp > anchor) continue
     const key = dayFmt.format(new Date(record.date))
     dayTotals.set(key, (dayTotals.get(key) ?? 0) + record.total)
   }
+  if (dayTotals.size === 0) return []
 
   const anchorDayKey = dayFmt.format(new Date(anchor))
   const [y, m, d] = anchorDayKey.split('-').map(Number)
@@ -109,13 +113,19 @@ export function buildWeeklyData(records: UsageRecord[], anchor: number, timeZone
   const dayOfWeek = new Date(anchorCalTime).getUTCDay()
   const monOffset = (dayOfWeek + 6) % 7
   const currentWeekMondayCal = anchorCalTime - monOffset * 86_400_000
+  const rangeStartDayKey = dayFmt.format(new Date(rangeStart))
+  const [startY, startM, startD] = rangeStartDayKey.split('-').map(Number)
+  const rangeStartCalTime = Date.UTC(startY, startM - 1, startD)
+  const rangeStartDayOfWeek = new Date(rangeStartCalTime).getUTCDay()
+  const rangeStartMondayCal = rangeStartCalTime - ((rangeStartDayOfWeek + 6) % 7) * 86_400_000
+  const weekCount = Math.floor((currentWeekMondayCal - rangeStartMondayCal) / (7 * 86_400_000)) + 1
 
   return Array.from({ length: 7 }, (_, dayIndex) => {
     const dayCal = currentWeekMondayCal + dayIndex * 86_400_000
     const point: Record<string, string | number> = {
       label: weekdayFmt.format(new Date(dayCal)),
     }
-    for (let weekIndex = 0; weekIndex < 4; weekIndex += 1) {
+    for (let weekIndex = 0; weekIndex < weekCount; weekIndex += 1) {
       const targetDayCal = currentWeekMondayCal - weekIndex * 7 * 86_400_000 + dayIndex * 86_400_000
       const targetDayKey = new Date(targetDayCal).toISOString().slice(0, 10)
       point[`week${weekIndex}`] = dayTotals.get(targetDayKey) ?? 0
