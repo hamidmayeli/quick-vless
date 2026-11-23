@@ -17,6 +17,7 @@ public static class ConfigEndpoints
             UserRepository repo,
             XrayRuntime xray,
             VlessUrlGenerator generator,
+            RetiredSecrets retiredSecrets,
             ILogger<Log> logger) =>
         {
             logger.LogDebug("GET /config/{UserId}", userId);
@@ -39,6 +40,7 @@ public static class ConfigEndpoints
                 var oldSecret = user.Secret;
                 user.Secret = Guid.NewGuid().ToString();
                 await repo.UpdateAsync(user);
+                retiredSecrets.Retire(oldSecret, user.Id);
                 await xray.SecretRotatedAsync(user, oldSecret);
                 logger.LogInformation("GET /config/{UserId} — rotated secret for single-connection user {Name}", userId, user.Name);
             }

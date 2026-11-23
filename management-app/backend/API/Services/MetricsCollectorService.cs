@@ -7,6 +7,7 @@ public sealed class MetricsCollectorService(
     XrayService xray,
     UsageRepository usageRepo,
     UserRepository userRepo,
+    RetiredSecrets retired,
     ILogger<MetricsCollectorService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -49,7 +50,13 @@ public sealed class MetricsCollectorService(
             if (stats.Count == 0) return;
 
             var users = await userRepo.GetAllAsync();
-            var userById = users.ToDictionary(u => u.Secret, u => u.Id);
+
+            // Retired (rotated) secrets first, so a current secret always wins on the off chance of a clash.
+            var userById = retired.Snapshot().ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            foreach (var user in users)
+                userById[user.Secret] = user.Id;
+
             var date = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 
             foreach (var (secret, totalBytes) in stats)
@@ -64,6 +71,9 @@ public sealed class MetricsCollectorService(
                     Total = totalBytes,
                 });
             }
+
+            // Only after a successful read: if Xray was unreachable the retired secrets are still needed.
+            retired.Purge();
         }
         catch (Exception ex)
         {

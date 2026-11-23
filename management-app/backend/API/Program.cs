@@ -27,6 +27,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<AdminRepository>();
 builder.Services.AddSingleton<UsageRepository>();
+builder.Services.AddSingleton<RetiredSecrets>();
 
 // Auth
 builder.Services.AddSingleton<TokenService>();
